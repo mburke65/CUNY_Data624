@@ -1,0 +1,108 @@
+---
+title: "Homework_Week2"
+author: "Meaghan Burke"
+date: "September 7, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp2)
+library(ggplot2)
+```
+
+### Week 2 Assignment 
+
+**HW - HA (6.2)**
+
+
+2. The plastics data set consists of the monthly sales (in thousands) of product A for a plastics manufacturer for five years. 
+
+
+
+a. Plot the time series of sales of product A. Can you identify seasonal fluctuations and/or a trend-cycle?
+
+**Trend: Increasing over 1 year**
+**Appears to be some seasonality(lag graph), length 1 year** 
+
+```{r}
+
+autoplot(plastics) + ggtitle("Sales of Product A") + ylab("Sales(Monthly)")
+ggAcf(plastics)+ ggtitle("Seasonality of Product A") 
+```
+
+
+b. Use a classical multiplicative decomposition to calculate the trend-cycle and seasonal indices.
+
+** The multiplicative decomposition shows a general upward trend from year 2 through year 5. After year 5, the trend appears to be decreasing. The decomposition graph also displays a seasonal shift (up/down) in one year increments.**
+```{r}
+plastics %>%
+decompose(type="multiplicative") %>% 
+autoplot() + 
+ggtitle("Sales of Product A")
+```
+
+
+
+
+c. Do the results support the graphical interpretation from part a?
+
+** Both part a and part b display a seasonal component of 1 year and a trend that is increasing over time. The decomposition does show a decline after year 5 because it relies on moving averages.**
+d. Compute and plot the seasonally adjusted data.
+
+**The "Adjusted Seasonal" plot shows the sales with the seasonality removed, making the upward trend is more visable**
+```{r}
+
+mult.decomposition <- plastics %>%
+  decompose(type="multiplicative") %>%
+  seasonal
+
+
+autoplot(plastics /mult.decomposition, series = "Adjusted Seasonal")+ 
+  autolayer(plastics, series = "Plastics - Normal") +
+  ggtitle("Sales of Product A & Seasonally Adjusted Sales Product A")
+```
+
+
+e. Change one observation to be an outlier (e.g., add 500 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?
+
+**After 500 was added to the 35th datapoint in "plastics.adj" dataset, a large spike occurred in the middle of the data series and the seasonally adjusted data series. This can be observed in the chart below.**
+
+
+```{r}
+plastics.adj <- plastics
+plastics.adj[35] <- plastics.adj[35]+500
+
+
+mult.decomposition.adj <- plastics.adj %>%
+  decompose(type="multiplicative") %>%
+  seasonal
+
+
+autoplot(plastics.adj /mult.decomposition, series = "Adjusted Seasonal")+ 
+  autolayer(plastics.adj, series = "Plastics - Normal") +
+  ggtitle("Sales of Product A & Seasonally Adjusted Sales Product A (Adjusted Series [MIDDLE])")
+```
+
+f. Does it make any difference if the outlier is near the end rather than in the middle of the time series?
+
+
+
+**After 500 was added to the 60th datapoint in "plastics.adj.end" dataset, a large spike occurred at the end of the dataset. However, the seasonality seems to more closely mirror that of the original chart. ** 
+
+
+```{r}
+end.series<- length(plastics)
+plastics.adj.end <- plastics
+plastics.adj.end[end.series] <- plastics.adj.end[end.series]+500
+
+
+mult.decomposition.adj <- plastics.adj.end %>%
+  decompose(type="multiplicative") %>%
+  seasonal
+
+
+autoplot(plastics.adj.end /mult.decomposition, series = "Adjusted Seasonal [END]")+ 
+  autolayer(plastics.adj.end, series = "Plastics - Normal") +
+  ggtitle("Sales of Product A & Seasonally Adjusted Sales Product A (Adjusted Series [END])")
+```
