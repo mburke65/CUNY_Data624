@@ -2,7 +2,7 @@
 
 Data 624 Cuny
 
-Meaghan
-Hantz
-Mike
-Yohannes 
+- Meaghan
+- Hantz
+- Mike
+- Yohannes 
