@@ -1,0 +1,136 @@
+---
+title: "Homework-Data 624"
+author: "Meaghan Burke"
+date: "September 7, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(forecast)
+library(ggplot2)
+library(gridExtra)
+library(knitr)
+```
+
+### Week 1 Assignment 
+
+**HW - HA (2.1, 2.3)**
+
+
+
+#### 2.1 Use the help function to explore what the series **gold**, **woolyrnq** and **gas** represent.
+
+
+```{r echo = F}
+#?gold
+#?woolyrnq
+#?gas
+
+```
+
+*The gold, woolyrnq, and gas datsets are found in the forecast library*
+
+**?gold**  Daily morning gold prices in US dollars. 1 January 1985 - 31 March 1989. tsdisplay(gold)
+
+**?woolyrnq** Quarterly production of woollen yarn in Australia: tonnes. Mar 1965 - Sep 1994. tsdisplay(woolyrnq)
+
+**?gas** Australian monthly gas production: 1956-1995.tsdisplay(gas)
+
+
+##### a. Use autoplot() to plot each of these in separate plots.
+
+
+
+
+
+```{r, message=FALSE}
+plot1<- autoplot(gold) + ggtitle("Daily morning gold prices in US dollars. 1 January 1985 - 31 March 1989")
+plot2 <- autoplot(woolyrnq)+ ggtitle("Quarterly production of woollen yarn in Australia: tonnes. Mar 1965 - Sep 1994")
+plot3<- autoplot(gas)+ ggtitle("Australian monthly gas production: 1956-1995")
+
+grid.arrange(plot1, plot2,plot3, nrow=3)
+```
+
+
+
+##### b. What is the frequency of each series? Hint: apply the frequency() function.
+
+
+```{r, warning= F, message = F}
+kable(cbind(paste0("Frequency Gold: ", frequency(gold)),
+paste0("Frequency Woolyrnq: ", frequency(woolyrnq)),
+paste0("Frequency Gas: ", frequency(gas))))
+```
+
+##### c. Use which.max() to spot the outlier in the gold series. Which observation was it?
+```{r}
+paste0("Maximum Gold (Outlier Detection): ", which.max(gold))
+```
+
+
+#### 2.3 Download some monthly Australian retail data from the book website. These represent retail sales in various categories for different Australian states, and are stored in a MS-Excel file.
+
+
+##### a. You can read the data into R with the following script:
+
+```{r message = F, warning = F}
+temp = tempfile(fileext = ".xlsx")
+dataURL <- "https://otexts.com/fpp2/extrafiles/retail.xlsx"
+download.file(dataURL, destfile=temp, mode='wb')
+
+retaildata <- readxl::read_excel(temp, sheet =1, skip =1)
+kable(head(retaildata[1:6,1:6]))
+```
+
+##### b. Select one of the time series as follows (but replace the column name with your own chosen column):
+
+
+*COlumn "A3349337W": "Turnover ;  New South Wales ;  Hardware, building and garden supplies retailing"* 
+```{r}
+myts <- ts(retaildata[,"A3349337W"], frequency=12, start=c(1982,4))
+myts
+```
+
+
+##### c. Explore your chosen retail time series using the following functions
+  -autoplot(), ggseasonplot(), ggsubseriesplot(), gglagplot(), ggAcf()
+  
+  
+  
+**Trend: A trend exists when there is a long-term increase or decrease in the data. As per the below (autoplot) there seems to be a general upward trend in the data**
+
+```{r}
+autoplot<- autoplot(myts) + ggtitle("(autoplot) Turnover NSW: Hardware, building and garden supplies retailing")
+autoplot
+```
+
+  
+**Seasonality: A seasonal pattern occurs when a time series is affected by seasonal factors such as the time of the year or the day of the week. The seasonal plots are similar to a time plot except that the data are plotted against the individual "seasons" in which the data were observed. Below, the turnover in NSW  for Hardware, building and garden supplies retailing is plotted using the seasonal plots to test seasonality. The data shows that the turnover is higher in the September, October, November and December months. This makes sense as Australia spring season starts in September and ends in late December.This is especially exemplified in the lag plots with the largest lags 12 months apart and the polar seasonplot**
+  
+```{r}
+#seasonality
+
+ggseasonplot<- ggseasonplot(myts)+ ggtitle("(ggseasonplot) Turnover NSW: Hardware, building and garden supplies retailing")
+ggsubseriesplot<- ggsubseriesplot(myts)+ ggtitle("(ggsubseriesplot) Turnover NSW: Hardware, building and garden supplies retailing")
+
+ggseasonplotpolar<-ggseasonplot(myts, polar=TRUE)  
+gglagplot<- gglagplot(myts)+ ggtitle("(gglagplot) Turnover NSW: Hardware, building and garden supplies retailing")
+ggAcf<- ggAcf(myts)+ ggtitle("(ggAcf) Turnover NSW: Hardware, building and garden supplies retailing")
+
+ggseasonplot
+ggsubseriesplot
+ggseasonplotpolar
+gglagplot
+ggAcf
+``` 
+  
+
+  
+  
+
+
+
+
+
+
