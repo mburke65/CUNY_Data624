@@ -1,0 +1,207 @@
+---
+title: "624. HW2. Fall 2019"
+author: "Mikhail Groysman"
+date: "9/20/2019"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_depth: 5
+
+---
+
+Exercise come from book "Forecasting: Principles and Practice" by Rob J Hyndman and George Athanasopoulos, Chapter 6 "Time series decomposition"
+
+# 6.2
+
+The plastics data set consists of the monthly sales (in thousands) of product A for a plastics manufacturer for five years.
+
+a. Plot the time series of sales of product A. Can you identify seasonal fluctuations and/or a trend-cycle?
+b. Use a classical multiplicative decomposition to calculate the trend-cycle and seasonal indices.
+c. Do the results support the graphical interpretation from part a?
+d. Compute and plot the seasonally adjusted data.
+e. Change one observation to be an outlier (e.g., add 500 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?
+f. Does it make any difference if the outlier is near the end rather than in the middle of the time series?
+
+## A
+
+First, we will load plastics data.
+
+```{r, message=FALSE, warning=FALSE}
+
+#install.packages("forecast")
+
+#install.packages("fma")
+
+library(forecast)
+
+library(ggplot2)
+
+library(fma)
+
+plastics <- fma::plastics
+
+head(plastics)
+
+summary(plastics)
+
+```
+
+
+We can see that no values is missing and data ranges from 697 to 1637.
+
+Let's plot our data.
+
+```{r}
+
+autoplot(plastics) +
+  ggtitle("Monthly sales of plastics product A - 5 year time period") +
+  xlab("Montly") +
+  ylab("In thousands")
+
+```
+
+Data is heavily seasonal.Dropping in winter and peaking in summer. Overall trend is positive.
+
+## B
+
+Let's do multuplicative decomposition
+
+```{r}
+
+plastics_decomp<-decompose(plastics,type="multiplicative")
+
+head(plastics_decomp)
+
+summary(plastics_decomp)
+
+
+```
+
+Let's plot decomposed data:
+
+```{r, results='hide',warning=FALSE}
+
+autoplot(plastics_decomp) +
+  ggtitle("Monthly sales of plastics product A - 5 year time period - Multiplicative Decomposition") +
+  xlab("Montly") 
+```
+
+## C
+
+The decomposition shows strong seasonality in middle of year(summer), and overall positive trend with a small dip in year 5. Except for dip in year 5, visual interpretation from (a) was consistent with decomposition.
+
+## D 
+
+Let's do calculate and plot the sesonally adjusted data.
+
+```{r}
+
+#install.packages("seasonal")
+
+library(seasonal)
+
+adjust_plastics<-plastics/plastics_decomp$seasonal
+
+autoplot(adjust_plastics) +
+  ggtitle("Monthly sales of plastics product A - 5 year time period - Seasonally Adjusted") +
+  xlab("Montly") +
+  ylab("In thousands")
+
+
+```
+
+Seasonal Adjustment shows that the first year sales were flat and then they grew for the next 3 years. The 5th year saw a drop in sales. 
+
+## E
+
+Let's make the 1st observation 500 higher.
+
+```{r}
+
+plastics[1]<-plastics[1]+500
+
+head(plastics)
+
+```
+
+Let's recalculate seasonaly adjusted data.
+
+
+```{r}
+
+plastics_decomp<-decompose(plastics,type="multiplicative")
+
+adjust_plastics<-plastics/plastics_decomp$seasonal
+
+autoplot(adjust_plastics) +
+  ggtitle("Monthly sales of plastics product A - 5 year time period - Seasonally Adjusted") +
+  xlab("Montly") +
+  ylab("In thousands")
+
+```
+
+As expected, we see a big drop in the beginning of the 1st year, then data is flat. The data grows for the next 3 year, and then drops in year 5. I do not see much an effect.
+
+
+## F
+
+Let's try both scenarios.
+
+In the middle, first
+
+```{r}
+
+plastics[1]<-plastics[1]-500
+
+plastics_m<-plastics
+
+plastics_m[30]<-plastics_m[30]+500
+
+```
+
+Let's recalculate seasonaly adjusted data and plot it.
+
+```{r}
+
+plastics_decomp_m<-decompose(plastics_m,type="multiplicative")
+
+adjust_plastics_m<-plastics_m/plastics_decomp_m$seasonal
+
+autoplot(adjust_plastics_m) +
+  ggtitle("Monthly sales of plastics product A - 5 year time period - Seasonally Adjusted") +
+  xlab("Montly") +
+  ylab("In thousands")
+
+```
+
+We see data our data spike in the middle, as we expected. Also, overall data looks less smooth.
+
+Next, let's try to put an outlier in the end of our data.
+
+```{r}
+
+plastics_e<-plastics
+
+plastics_e[54]<-plastics_e[54]+500
+
+```
+
+Let's recalculate seasonaly adjusted data and plot it.
+
+```{r}
+
+plastics_decomp_e<-decompose(plastics_e,type="multiplicative")
+
+adjust_plastics_e<-plastics_e/plastics_decomp_e$seasonal
+
+autoplot(adjust_plastics_e) +
+  ggtitle("Monthly sales of plastics product A - 5 year time period - Seasonally Adjusted") +
+  xlab("Montly") +
+  ylab("In thousands")
+
+```
+
+Now, data seems to increase with a big spike in the beginning of the middle of year 5, then a drop. Again, data appears to be less smooth.
+
+I see that putting an outlier in the end, makes a drop in sales shorter in duration. 

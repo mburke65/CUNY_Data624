@@ -1,0 +1,273 @@
+---
+title: "624. HW1. Fall 2019"
+author: "Mikhail Groysman"
+date: "9/17/2019"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_depth: 5
+
+---
+
+Exercises come from book "Forecasting: Principles and Practice" by Rob J Hyndman and George Athanasopoulos, Chapter 2 "Time Series Graphics"
+
+# 2.1
+
+Use the help function to explore what the series gold, woolyrnq and gas represent.
+
+a) Use autoplot() to plot each of these in separate plots.
+b) What is the frequency of each series? Hint: apply the frequency() function.
+c) Use which.max() to spot the outlier in the gold series. Which observation was it?
+
+## A
+
+First, as instructed, we will use help function to understand what tiype of time series data we are given.
+
+```{r, message=FALSE, warning=FALSE}
+
+#install.packages("forecast")
+
+library(forecast)
+
+library(ggplot2)
+
+help(gold)
+
+help(woolyrnq)
+
+help(gas)
+
+```
+
+
+Gold time series represents daily gold prices for time period 1/1/85-3/31/89.
+
+Woolyrnq time series represents quaterly production of woolen yarn in Australia, in tonnes for time period 3/65-9/94.
+
+Gas time series represents Australian monthly gas production for time period 1956-1995.
+
+
+Next, we will look at the top observations for each dataset.
+
+```{r, results='hide',warning=FALSE}
+
+head(gold)
+
+head(woolyrnq)
+
+head(gas)
+
+```
+
+We can see that data is indeed given in different time intervals: days, quarters, and months.
+
+
+So, let's get summary of our datasets
+
+```{r}
+
+summary(gold)
+
+```
+
+GOld has values in range from 285 to 594, with 34 observations missing data.
+
+
+```{r}
+
+summary(woolyrnq)
+
+```
+
+Woolyrnq has values in range from 3,300 to 7,800, with no data missing.
+
+
+```{r}
+
+summary(gas)
+
+```
+
+Gas has values in range from 1,600 to 66,600, with no data missing.
+
+
+Let's plot our data next.
+
+```{r}
+
+autoplot(gold) +
+  ggtitle("Daily gold prices for time period 1/1/85-3/31/89") +
+  xlab("Day") +
+  ylab("Dollars")
+
+```
+
+We can see that gold price were increasing for the first 750 days and then spiked sharply, before declining.
+
+```{r}
+
+autoplot(woolyrnq) +
+  ggtitle("Quaterly production of woolen yarn in Australia, in tonnes for time period 3/65-9/94") +
+  xlab("Year") +
+  ylab("Tonnes")
+
+```
+
+We can see that yarn production was increasing from 1965 to 1970, then declined from 1970 to approxiametly 1983 (there was sharp drop in 1975). From 1983, the production was increasing until 1988, then dropped again, only to recover somewhat by 1995. There seem to be a lot volatility in yarn production.
+
+```{r}
+
+autoplot(gas) +
+  ggtitle("Australian monthly gas production: 1956-1995") +
+  xlab("Year") +
+  ylab("")
+
+```
+
+We can see that gas production was pretty stable until 1970. After 1970, production was increasing. 
+
+##B
+
+As per the hint, let's apply frequency function.
+
+```{r}
+
+frequency(gold)
+
+```
+
+For some reasons, the function indicates that our data is annual basis, while in reality it is on daily basis. It seems to be a glitch.
+
+```{r}
+
+frequency(woolyrnq)
+
+```
+
+This time, the function correctly shows that our data is on quaterly basis.
+
+```{r}
+
+frequency(gas)
+
+```
+
+Gas data is provided on monthly basis.
+
+## C
+
+Let's apply which.max() function to Gold dataset to find outliers.
+
+```{r}
+
+which.max(gold)
+
+```
+
+We can see that a spike for gold prices has happened on day 770.
+
+
+# 2.3
+
+Download some monthly Australian retail data from the book website. These represent retail sales in various categories for different Australian states, and are stored in a MS-Excel file.
+
+a. You can read the data into R with the following script:
+
+retaildata <- readxl::read_excel("retail.xlsx", skip=1)
+The second argument (skip=1) is required because the Excel sheet has two header rows.
+
+b. Select one of the time series as follows (but replace the column name with your own chosen column):
+
+myts <- ts(retaildata[,"A3349873A"],
+  frequency=12, start=c(1982,4))
+
+c. Explore your chosen retail time series using the following functions:
+
+autoplot(), ggseasonplot(), ggsubseriesplot(), gglagplot(), ggAcf()
+
+Can you spot any seasonality, cyclicity and trend? What do you learn about the series?
+
+
+## A
+
+After the data was downloaded, it can be read in:
+
+```{r}
+
+retaildata <- readxl::read_excel("retail.xlsx", skip=1)
+
+head(retaildata)
+
+summary(retaildata)
+
+```
+
+Our dataset has a lot of different information.
+
+## B
+
+Let's look at one of the time series:
+
+```{r}
+
+myts <- ts(retaildata[,"A3349335T"],
+  frequency=12, start=c(1982,4))
+
+head(myts)
+
+summary(myts)
+
+```
+
+Values vary from 298 to 2612,
+
+##C
+
+Let's apply the specified functions:
+
+```{r}
+
+autoplot(myts)
+
+```
+
+
+Our data is consistently increasing.
+
+```{r}
+
+
+ggseasonplot(myts)
+
+```
+
+Itg seems our data tend to increase slightly in December. February, the shortest month, seems to dip a little bit.
+
+```{r}
+
+ggsubseriesplot(myts)
+
+```
+
+Again, we see that December is the highest month and February is the lowest.
+
+```{r, fig.height = 10, fig.width = 10}
+
+
+gglagplot(myts)
+
+```
+
+If we look at Lag 12 we can see very strong indication of autocorrelation.
+
+```{r}
+
+ggAcf(myts, lag=48)
+
+```
+
+Consistent decrease due to trend and very slight "scalloped" shape due to slight seasonality.
+
+
+Our data has positive trend, very slight seasonality and no cyclicity.
