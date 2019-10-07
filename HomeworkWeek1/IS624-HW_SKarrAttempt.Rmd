@@ -1,0 +1,104 @@
+---
+title: "Time Series Graphics exercises - HW1"
+output:
+  html_document:
+    css: ./lab.css
+    highlight: pygments
+    theme: cerulean
+  pdf_document: default
+  word_document: default
+---
+#####Chapter 2 HA 1 and 3
+
+1.  2.1 Use the help function to explore what the series (`gold`), (`woolyrnq`) and (`gas`) represent.
+
+```{r include=FALSE}
+library(fpp2)
+library(ggplot2)
+library(forecast)
+library(GGally)
+library(psych)
+```
+
+Evaluation of *gold*:  
+The `gold` dataset is structured as a timeseries object.  The description notes that the dimensions being compared are time in days 1 January 1985 – 31 March 1989 against price in gold of US dollar. 
+Based on the plot, the price of gold steadily increases until ~800 days pass, there is a notable 30%
+spike and then a steady dropoff in price for the remaining 250 days.
+
+The time dimension of this dataset being daily, isn't setup to identify seasonality or year-over-year 
+trends, so this type of evaluation has not been done.  It is possible to transform the dataset with
+different granuality of the time dimension in order to reveal such trends.
+
+The lag scales simply show a trend of decreasing price at a somewhat constant rate crossing into decreasing price at a constant rate.  The crossover occurs significantly at the point of the spike in price.  Most of the PACF lag is within the range for being attributed to white noi
+
+```{r, eval=TRUE}
+help(gold)
+# Description:  "Daily morning gold prices in US dollars. 1 January 1985 – 31 March 1989."
+# Usage:        "gold"
+# Format:        "Time series data"
+
+describe(gold)
+head(gold)
+plot(gold)
+tsdisplay(gold)
+```
+
+###Evaluation of *wool*
+The `wool` dataset is not structured as a timeseries object but this is easily remedied.  It is clear from inspecting the data that the time dimension is quarterly beginning in 1965.  The ts (timeseries) function converts the data so seasonality or year-over-year analysis is possible.  It isn't clear what the `measure` dimension is capturing but perhaps it represents unit price or amount produced.  In any case the trend shows an inital rise during the late 1960's followed by a greater drop during the 1970's and early 1980's, some fluctuation in the later 1980's early 1990's followed by a spike in the mid 1990's.  The seasonality plots show peaks in Q3 and nadirs in Q1.
+
+The lag plots show slight diminishing ACF trend with cyclical seasonal fluctuation and cyclical PACF with a diminishing magnitude.
+
+```{r, eval=TRUE}
+wool <- ts(woolyrnq, start=1965, frequency=4)
+describe(wool)
+head(wool)
+plot(wool)
+seasonplot(wool)
+help(wool)
+tsdisplay(wool)
+```
+
+###Evaluation of *gas*
+The `gas` dataset is structured as a timeseries object.  The description notes that the dimensions being compared are time months 1956 – 1995 against production of Austrailian gas in 10K increments of unit volume. 
+
+Based on the plot, the production of gas is flat up until the 1970s with slight seasonal fluctuation.  From 1970 onward however, the trend shows increasing production at an increasing rate coupled with an increase in seasonal fluctuation.  
+
+The seasonal plot shows peak production during July--winter in Austrailia--with a nadir during December and January--summer month.
+
+The lag plots show slight diminishing ACF trend with cyclical seasonal fluctuation and cyclical PACF with a diminishing magnitude.  The magnitude becomes small enough toward the end that it could be attributed to white noise.
+
+```{r, eval=TRUE}
+help(gas)
+# Description:  "Australian monthly gas production: 1956–1995."
+# Usage:        "gas"
+# Format:        "Time series data"
+describe(gas)
+head(gas)
+plot(gas)
+seasonplot(gas)
+tsdisplay(gas)
+```
+
+
+2. 2.3 Use `autoplot()` to plot each of these in separate plots. 
+```{r, eval=TRUE,include=TRUE}
+  autoplot(gold) +
+  ggtitle("Daily price of gold: US Dollars 1/1/1985 - 3/31/1989") +
+  xlab("Days") +
+  ylab("$ US Dollars")
+```
+
+```{r, eval=TRUE,include=TRUE}
+  autoplot(wool) +
+  ggtitle("Amount of wool: Austrailian Dollars 1965 - 1995") +
+  xlab("Month") +
+  ylab("Amount in ? units")
+```
+
+```{r, eval=TRUE,include=TRUE}
+  autoplot(gas) +
+  ggtitle("Australian monthly gas production: Austrailian Dollar 1956–1995.") +
+  xlab("Month") +
+  ylab("Amount in ? units")
+```
+
