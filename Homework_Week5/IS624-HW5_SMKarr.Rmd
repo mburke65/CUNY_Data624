@@ -1,0 +1,294 @@
+---
+title: "Exponential Smoothing - HW4"
+---
+##### Chapter 7 HA 7.5, 7.6 and 7.10
+
+7.5 Forecast the next four days of paperback and hardcover books using the data set *books* which contains the same store daily sales data for paperback and hardcover books.
+
+The problem set uses the books timeseries which contains 30 observations of same-store hardback and paperback sales.
+We are asked to . . .
+
+a)  Plot the series and discuss its main features.  
+This shows the 30 day timeseries for both types of books by number sold.
+
+b)  Uses the ses() function to forecast each series and plot the forecasts.
+To do this I first separated the hardbacks and paperbacks into distinct timeseries.  Not doing so will generate an error stating the function requires a univariate timeseries.  Then I ran the Simple Exponential Smoothing (SES) function against both hardbacks and paperbacks for h=4 or 4 days (periods) of forecasting.  This function returns forecasts and other information for exponential smoothing forecasts applied each timeseries.  I then rounded the training errors and plotted the series
+
+c)  Compute the RMSE values for the training data in each case.
+The accuracy function returns a range of summary measures of the forecast accuracy including Root Mean Square Error. for each training data timeseries including RMSE.  For paperbacks books RMSE=33.64 and for hardback books RMSE=31.93.
+
+```{r, load-packages, eval=TRUE, include=FALSE}
+library(fpp2)
+```
+
+```{r, load_and_plot_books_ses, eval=TRUE, fig.width=18, fig.height=6}
+data(books)
+autoplot(books) +
+  ylab("back books #sold") + xlab("days")
+```
+
+```{r, apply_ses_to_books, eval=TRUE, fig.width=18, fig.height=6}
+#create distinct timeseries
+paperback_books_ts<-books[,1]
+hardback_books_ts<-books[,2]
+# Estimate parameters
+fc_pb_ses<-ses(paperback_books_ts, h=4)
+fc_hb_ses<-ses(hardback_books_ts, h=4)
+# Accuracy of one-step-ahead training errors paperback
+round(accuracy(fc_pb_ses),2)
+#                ME  RMSE   MAE  MPE  MAPE MASE  ACF1
+# Training set 7.18 33.64 27.84 0.47 15.58  0.7 -0.21
+
+# Accuracy of one-step-ahead training errors hardback
+round(accuracy(fc_hb_ses),2)
+#                ME  RMSE   MAE  MPE  MAPE MASE  ACF1
+# Training set 9.17 31.93 26.77 2.64 13.39  0.8 -0.14
+```
+
+```{r, plot_ses_predictions, eval=TRUE, fig.width=18, fig.height=6}
+autoplot(fc_pb_ses) +
+  autolayer(fitted(fc_pb_ses),series="Fitted") +
+  ylab("Paperbacks sold") + xlab("days")
+
+autoplot(fc_hb_ses) +
+  autolayer(fitted(fc_hb_ses),series="Fitted") +
+  ylab("Hardbacks sold") + xlab("days")
+```
+
+7.6 (a continuation of problem 7.5)
+
+a) Now apply Holt's linear method to the paperback and hardback series and compute four-day forecasts in each case.  
+The tsCV function computes the forecast errors obtained by applying forecast function to subsets of the time series   paperback_books_ts and hardback_books_ts using a rolling forecast origin.  The Holt method uses h=4 (4 days) as input parameters projecting a 4 day forecast.
+
+b) Compare the RMSE measures of Holt's method for the two series to those of simple exponential smoothing in the previous question.  (Remember that Holt's method is using one more parameter than SES.)  Discuss the merits of the two forecasting methods for these data sets.
+
+    The holt series yields an RMSE of 31.14 for paperback books and 27.19 for hardback books. 
+    The ses series yields an RMSE of 33.64 for paperback books and 31.93 for hardback books. 
+    The smaller value of RMSE for hardback books indicates a better fit for both series using the Holt method. 
+    Using both methods hardbacks yield a lower RMSE which indicates a better fit then paperbacks. 
+    
+    It appears that by extending the SES method with a trend equation for forecasting, the overall fit of the Holt method is      an improvement over the SES method, presumably where the data being examined has a clear trend. 
+    
+    <!-- Compare HOLT Error stats for paperback and hardback datasets -->
+    <!-- > round(accuracy(fc_pb_holt),2) -->
+    <!--                 ME  RMSE   MAE   MPE  MAPE MASE  ACF1 -->
+    <!-- Training set -3.72 31.14 26.18 -5.51 15.58 0.66 -0.18 -->
+    
+    <!-- > round(accuracy(fc_hb_ses),2) -->
+    <!--                 ME  RMSE   MAE   MPE  MAPE MASE  ACF1 -->
+    <!-- Training set -0.14 27.19 23.16 -2.11 12.16 0.69 -0.03 -->
+    
+    <!-- Accuracy of one-step-ahead training errors paperback -->
+    <!-- round(accuracy(fc_pb_ses),2) -->
+    <!--               ME  RMSE   MAE  MPE  MAPE MASE  ACF1 -->
+    <!-- Training set 7.18 33.64 27.84 0.47 15.58  0.7 -0.21 -->
+    
+    <!-- Compare SES Error stats for paperback and hardback datasets -->
+    <!-- round(accuracy(fc_hb_ses),2) -->
+    <!--               ME  RMSE   MAE  MPE  MAPE MASE  ACF1 -->
+    <!-- Training set 9.17 31.93 26.77 2.64 13.39  0.8 -0.14 -->
+
+c) Compare the forecasts for the two series using both methods.  Which do you think is best?
+ The RMSE is smaller for the paperback book data and therefore better fitted.  The trend line from the training data to the    predictions does seem to extrapolate more accurately as well.
+
+d) Calculate a 95% prediction interval for the first forecast for each series, using RMSE values and assuming normal errors.  Compare your intervals with those produced using ses and holt.
+
+    Note the 95% confidence intervals for the ses method have a greater range then that of the holt method for these 
+    predictions.
+
+    The Holt 95% prediction interval for the 1st forecast of the paperback timeseries is between 149.69 and 265.45 and the
+    Holt 95% prediction interval for the 1st forecast of the hardback timeseries is between 197.78 and 293.05.
+
+    This compares with the ses 95% prediction interval for the 1st forecast of the paperback timeseries is between 135.96 and 
+    277.16 and the ses 95% prediction interval for the 1st forecast of the hardback timeseries is between 197.78 and 293.05.
+
+    <!-- > holt(paperback_books_ts,bootstrap=TRUE) -->
+    <!--    Point Forecast    Lo 80    Hi 80    Lo 95    Hi 95 -->
+    <!-- 31       209.4668 162.1512 246.4387 149.6907 265.4503 -->
+    #
+    <!-- > ses(paperback_books_ts,bootstrap=TRUE) -->
+    <!--    Point Forecast    Lo 80    Hi 80    Lo 95    Hi 95 -->
+    <!-- 31       207.1097 159.1981 246.1439 135.9610 277.1593 -->
+    #
+    <!-- > holt(hardback_books_ts,bootstrap=TRUE) -->
+    <!--    Point Forecast    Lo 80    Hi 80    Lo 95    Hi 95 -->
+    <!-- 31       250.1739 214.4730 289.6273 197.7726 293.0467 -->
+    #
+    <!-- ses(hardback_books_ts,bootstrap=TRUE) -->
+    <!-- > ses(hardback_books_ts,bootstrap=TRUE) -->
+    <!--    Point Forecast    Lo 80    Hi 80    Lo 95    Hi 95 -->
+    <!-- 31       239.5601 205.6174 276.6788 183.4527 301.8855 -->
+
+```{r, evaluate_holt_for_book_series, eval=TRUE, fig.width=18, fig.height=6}
+#e1<-tsCV(paperback_books_ts,ses,h=4)
+e2<-tsCV(paperback_books_ts,holt,h=4)
+#e3<-tsCV(paperback_books_ts,holt,damped=TRUE,h=4)
+
+#e4<-tsCV(hardback_books_ts,ses,h=4)
+e5<-tsCV(hardback_books_ts,holt,h=4)
+#e6<-tsCV(hardback_books_ts,holt, damped=TRUE,h=4)
+
+#Compare MSE for paperbacks:
+#mean(e1^2,na.rm=TRUE)
+mean(e2^2,na.rm=TRUE)
+#mean(e3^2,na.rm=TRUE)
+#[1] 1475.265
+#> mean(e2^2,na.rm=TRUE)
+#[1] 2129.625
+#> mean(e3^2,na.rm=TRUE)
+#[1] 2152.224
+
+#Compare MSE for hardbacks
+#mean(e4^2,na.rm=TRUE)
+mean(e5^2,na.rm=TRUE)
+#mean(e6^2,na.rm=TRUE)
+#[1] 1500.838
+#> mean(e5^2,na.rm=TRUE)
+#[1] 1554.578
+#> mean(e6^2,na.rm=TRUE)
+#[1] 1589.293
+```
+
+```{r, build_holt_models, eval=TRUE, fig.width=18, fig.height=6}
+fc_pb_holt<-holt(paperback_books_ts,h=4)
+fc_hb_holt<-holt(hardback_books_ts,h=4)
+# Build Models
+fc_pb_holt[["model"]]
+# Holt's method 
+# Call:
+#  holt(y = paperback_books_ts) 
+# 
+#   Smoothing parameters:
+#     alpha = 1e-04 
+#     beta  = 1e-04 
+# 
+#   Initial states:
+#     l = 170.699 
+#     b = 1.2621 
+# 
+#   sigma:  33.4464
+# 
+#      AIC     AICc      BIC 
+# 318.3396 320.8396 325.3456 
+fc_hb_holt[["model"]]
+# Holt's method 
+# 
+# Call:
+#  holt(y = hardback_books_ts) 
+# 
+#   Smoothing parameters:
+#     alpha = 1e-04 
+#     beta  = 1e-04 
+# 
+#   Initial states:
+#     l = 147.7935 
+#     b = 3.303 
+# 
+#   sigma:  29.2106
+# 
+#      AIC     AICc      BIC 
+# 310.2148 312.7148 317.2208 
+```
+
+```{r, plot_holt_predictions, eval=TRUE, fig.width=18, fig.height=6}
+autoplot(fc_pb_holt) +
+  autolayer(fitted(fc_pb_holt),series="Fitted") +
+  ylab("Paperbacks sold") + xlab("days")
+
+autoplot(fc_hb_holt) +
+  autolayer(fitted(fc_hb_holt),series="Fitted") +
+  ylab("Hardbacks sold") + xlab("days")
+```
+
+```{r, evaluate_holt2ses_error, eval=TRUE, fig.width=18, fig.height=6}
+round(accuracy(fc_pb_holt),2)
+round(accuracy(fc_hb_holt),2)
+round(accuracy(fc_pb_holt,damped=TRUE),2)
+round(accuracy(fc_hb_holt,damped=TRUE),2)
+# > round(accuracy(fc_pb_holt),2)
+#                 ME  RMSE   MAE   MPE  MAPE MASE  ACF1
+# Training set -3.72 31.14 26.18 -5.51 15.58 0.66 -0.18
+# > round(accuracy(fc_hb_holt),2)
+#                 ME  RMSE   MAE   MPE  MAPE MASE  ACF1
+# Training set -0.14 27.19 23.16 -2.11 12.16 0.69 -0.03
+# > round(accuracy(fc_pb_holt,damped=TRUE),2)
+#                 ME  RMSE   MAE   MPE  MAPE MASE  ACF1
+# Training set -3.72 31.14 26.18 -5.51 15.58 0.66 -0.18
+# > round(accuracy(fc_hb_holt,damped=TRUE),2)
+#                 ME  RMSE   MAE   MPE  MAPE MASE  ACF1
+# Training set -0.14 27.19 23.16 -2.11 12.16 0.69 -0.03
+```
+
+7.7 For this exercise use data set eggs, the price of a dozen eggs in the United States from 1900-1993.  
+
+a) Experiment with the various options in the holt() function to see how much the forecasts change with damped trend or Box-Cox transformation.  *see diagrams below for comparison*
+
+b) Try to develop an intuition of what each argument is doing to the forecasts.  [Hint:  use h=100 when calling holt() so you can clearly see the differences between the various options when plotting the forecasts.]
+
+c) Which model gives the best RMSE?
+RMSE--the square root of a variance--can be interpreted as the standard deviation of the unexplained variance.  The Holt damped RMSE is the lowest and best fit model in this case. Lower values indicate better fit.  Based upon the diagrams, the Holt model and the simple back transformation of BoxCox appear to show the most accurate trendlines, but based on being the lowest RMSE values, the damped Holt model has the best fit.
+
+```{r, plot_eggs_ts, eval=TRUE, fig.width=18, fig.height=6}
+data(eggs)
+hist(eggs,breaks=100)
+#Price of dozen eggs in US, 1900–1993, in constant dollars.
+autoplot(eggs) +
+  ylab("Price of dozen eggs (constant $)") + xlab("years")
+
+lambda<-BoxCox.lambda(eggs)
+autoplot(BoxCox(eggs,lambda)) +
+  ylab("Price of dozen eggs (constant $)") + xlab("years")
+```
+
+```{r, evaluate_holt_for_eggs_series, eval=TRUE, fig.width=18, fig.height=6}
+e1<-tsCV(eggs,ses,h=100)
+e2<-tsCV(eggs,holt,h=100)
+e3<-tsCV(eggs,holt,damped=TRUE,h=100)
+
+#Compare MSE for eggs:
+mean(e1^2,na.rm=TRUE)
+mean(e2^2,na.rm=TRUE)
+mean(e3^2,na.rm=TRUE)
+# > #Compare MSE for eggs:
+# > mean(e1^2,na.rm=TRUE)
+# [1] 13200.06
+# > mean(e2^2,na.rm=TRUE)
+# [1] 77028.22
+# > mean(e3^2,na.rm=TRUE)
+# [1] 77608.15
+
+```
+
+```{r, build_prediction_models, eval=TRUE, fig.width=18, fig.height=6}
+fc_eggs_ses<-ses(eggs,h=100)
+fc_eggs_holt<-holt(eggs,h=100)
+fc_eggs_holt_damped<-holt(eggs,damped=TRUE,h=100)
+  
+# Build Models
+fc_eggs_ses[["model"]]
+fc_eggs_holt[["model"]]
+fc_eggs_holt_damped[["model"]]
+```
+
+
+```{r, plot_predictions, eval=TRUE, fig.width=18, fig.height=6}
+autoplot(fc_eggs_ses) +
+  autolayer(fitted(fc_eggs_ses),series="Fitted") +
+  ylab("Dozen Eggs Sold") + xlab("years")
+
+autoplot(fc_eggs_holt) +
+  autolayer(fitted(fc_eggs_holt),series="Fitted") +
+  ylab("Dozen Eggs Sold") + xlab("years")
+
+autoplot(fc_eggs_holt_damped) +
+  autolayer(fitted(fc_eggs_holt_damped),series="Fitted") +
+  ylab("Dozen Eggs Sold") + xlab("years")
+
+fc_eggs_BC<-rwf(eggs,drift=TRUE,lambda=0,h=100,level=80)
+fc2_eggs_BC<-rwf(eggs,drift=TRUE,lambda=0,h=100,level=80,biasadj=TRUE)
+
+autoplot(eggs) +
+  autolayer(fc_eggs_BC,series="Simple back transformation") +
+  autolayer(fc2_eggs_BC,series="Bias adjusted",PI=FALSE) +
+  guides(colour=guide_legend(title="Forecast"))
+```
