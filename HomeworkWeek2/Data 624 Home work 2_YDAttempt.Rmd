@@ -1,0 +1,292 @@
+---
+title: "Data 624 Home work 2"
+author: '...'
+date: "11/09/2019"
+output: 
+  word_document:
+    fig_width: 14
+    fig_height: 10
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Read HA #6
+
+# HW 6.2)).... 
+
+6. 2. The plastics data set consists of the monthly sales (in thousands) of product A for a plastics manufacturer for five years.
+```{r}
+# load the libraries
+library(fma)
+library(tidyverse)
+# load the data
+plastics <- fma::plastics
+glimpse(plastics)
+```
+
+a. Plot the time series of sales of product A. Can you identify seasonal fluctuations and/or a trend-cycle?
+
+```{r}
+autoplot(plastics) +
+  ggtitle("Monthly Sales of Product A") +
+  xlab("Year") +
+  ylab("Thousands")
+```
+seasonal plots
+
+```{r}
+ggseasonplot(plastics, year.labels=TRUE, year.labels.left=TRUE) +
+  ggtitle("Monthly Sales of Product A") +
+  xlab("Year") +
+  ylab("Thousands")
+```
+```{r}
+plot(plastics)
+seasonplot(plastics)
+plot(stl(plastics,"periodic"))
+
+```
+
+From the plots we can identify seasonal fluctuations and increasing trend.
+
+b. Use a classical multiplicative decomposition to calculate the trend-cycle and seasonal indices.
+
+```{r}
+plastics %>% decompose(type="multiplicative") %>%
+  autoplot() + xlab("Year") +
+  ggtitle("Classical multiplicative decomposition
+    of Monthly Plastics Sales")
+```
+Here seasonal indices m = 12
+
+```{r}
+ts_plastics = ts(plastics, frequency = 12)
+decompose_plastics = decompose(ts_plastics, "multiplicative")
+print("Trend and seasonal components")
+decompose_plastics$trend
+decompose_plastics$seasonal
+```
+
+c. Do the results support the graphical interpretation from part a?
+
+Answer: Yes. 
+d. Compute and plot the seasonally adjusted data.
+```{r}
+seasonally_adjusted <- plastics/decompose_plastics$seasonal
+plot(seasonally_adjusted,main="Seasonally Adjusted Data")
+```
+
+e. Change one observation to be an outlier (e.g., add 500 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?
+
+```{r}
+outlier_data <- plastics
+# add 500 to it
+outlier_data[20] <- outlier_data[20] + 500
+plot(outlier_data)
+outlier_data = ts(outlier_data, frequency = 12)
+decompose_outlier = decompose(outlier_data, "multiplicative")
+seasonally_adjusted <- outlier_data/decompose_outlier$seasonal
+plot(seasonally_adjusted,main="Seasonally Adjusted Data with Outlier")
+```
+
+The outlier affects the trend and seasonally adjusted data.
+
+f. Does it make any difference if the outlier is near the end rather than in the middle of the time series?
+```{r}
+outlier_data <- plastics
+# add 500 to it
+outlier_data[24] <- outlier_data[24] + 500
+plot(outlier_data)
+outlier_data = ts(outlier_data, frequency = 12)
+decompose_outlier = decompose(outlier_data, "multiplicative")
+seasonally_adjusted <- outlier_data/decompose_outlier$seasonal
+plot(seasonally_adjusted,main="Seasonally Adjusted Data with Outlier in the middle")
+```
+Yes. It makes difference if the outlier is near the end rather than in the middle of the time series.
+
+# Read KJ #3
+
+# HW 3.1
+
+3.1. The UC Irvine Machine Learning Repository6 contains a data set related to glass identification. The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe.
+The data can be accessed via:
+```{r}
+library(mlbench)
+data(Glass)
+str(Glass)
+
+```
+
+(a) Using visualizations, explore the predictor variables to understand their distributions as well as the relationships between predictors.
+
+### Histogram of predictors
+```{r}
+attach(Glass)
+ggplot(data = Glass)+geom_histogram(aes(RI))+ggtitle("Distributions of RI")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+ggplot(data = Glass)+geom_histogram(aes(Na))+ggtitle("Distributions of Na")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+ggplot(data = Glass)+geom_histogram(aes(Mg))+ggtitle("Distributions of Mg")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+ggplot(data = Glass)+geom_histogram(aes(Al))+ggtitle("Distributions of Al")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+ggplot(data = Glass)+geom_histogram(aes(Si))+ggtitle("Distributions of Si")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+ggplot(data = Glass)+geom_histogram(aes(K))+ggtitle("Distributions of K")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+ggplot(data = Glass)+geom_histogram(aes(Ca))+ggtitle("Distributions of Ca")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+ggplot(data = Glass)+geom_histogram(aes(Ba))+ggtitle("Distributions of Ba")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+ggplot(data = Glass)+geom_histogram(aes(Fe))+ggtitle("Distributions of Fe")+theme_classic()+theme(
+  plot.title = element_text(size = 16,hjust = 0.5),
+  axis.text = element_text(size =14),
+  axis.title = element_text(size = 14)
+)
+
+```
+RI ,Na,Mg,Al,Si,Ca is approximately normally distributed
+
+K,Ba,Fe is not normally distributed
+
+Correlation of the predictions
+
+```{r}
+library("PerformanceAnalytics")
+chart.Correlation(Glass[,1:9], histogram=TRUE, pch=19)
+```
+
+From correlation we can see that 
+
+RI is significantly positively correlated with CA and negatively correlated with AL,Si,K.
+Na is Significantly positively correlated with Ba and negatively correlated with Mg,Al,K,Ca,Fe.
+Mg is significantly negatively correlated with Ca,Ba ,Al.
+Al is significantly positively correlated with K,Ba and negatively correlated with Ca.
+Si is weakly negatively correlated with K and Cal. 
+
+(b) Do there appear to be any outliers in the data? Are any predictors skewed?
+
+From the above plot of histograms we can see that Mg,Si,K,Ca,Ba and Fe has outliers.
+Fe,Ba,Ca,K,Na,RI are positively skewed and Mg,Si are negatively skewed.
+
+(c) Are there any relevant transformations of one or more predictors that
+might improve the classification model?
+
+```{r}
+library(MASS)
+Glass$Type <- as.numeric(Glass$Type)
+par(mfrow = c(3,3))
+boxcox(Type~RI, data = Glass)
+boxcox(Type~Na, data = Glass)
+boxcox(Type~Mg, data = Glass)
+boxcox(Type~Al, data = Glass)
+boxcox(Type~Si, data = Glass)
+boxcox(Type~K, data = Glass)
+boxcox(Type~Ca, data = Glass)
+boxcox(Type~Ba, data = Glass)
+boxcox(Type~Fe, data = Glass)
+```
+From the box cox transformation plot we can see that log transformation of Na, Mg and Ba will improve the model.
+
+
+# 3.2
+
+3.2. The soybean data can also be found at the UC Irvine Machine Learning Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmen- tal conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct  classes.
+
+The data can be loaded via:
+```{r}
+library(mlbench)
+data(Soybean)
+glimpse(Soybean)
+```
+
+(a) Investigate the frequency distributions for the categorical predictors. Are any of the distributions degenerate in the ways discussed earlier in this chapter?
+
+We'll first plot make barplot
+```{r}
+df <- Soybean[,2:36]
+par(mfrow = c(3, 6))
+for (i in 1:ncol(df)) {
+  barplot(table(df[,i]),ylab = names(df[i]))
+}
+```
+
+nearZeroVar in R for the categorical variables
+
+```{r}
+library(caret)
+nearZeroVar(df,names = TRUE, saveMetrics=T)
+```
+There are few distributions degenerate . Specifically leaf.mild,mycelium and sclerotia.
+
+(b) Roughly 18 % of the data are missing. Are there particular predictors that are more likely to be missing? Is the pattern of missing data related to the classes?
+
+Now we'll plot map of the missing data
+```{r}
+library(Amelia)
+missmap(Soybean)
+```
+
+Amount of missing in each variable
+
+```{r}
+sort(colMeans(is.na(Soybean)),decreasing = T)
+```
+Particularly  hail     ,      sever   ,     seed.tmt   ,      lodging    ,        germ ,   leaf.mild fruiting.bodies  ,   fruit.spots ,  seed.discolor  ,    shriveling , leaf.shread            seed    , mold.growth  ,     seed.size      , leaf.halo  , are more likelly to be missing.
+
+Missing values by group
+
+```{r}
+Soybean %>%
+mutate(total = n()) %>% 
+group_by(Class) %>%
+mutate(Missing = n(), Proportion=Missing/total) %>%
+dplyr::select(Class, Missing, Proportion) %>%
+unique() %>% 
+  arrange(-Proportion)
+```
+
+Most of the missing values are in the following classes brown-spot,alternarialeaf-spot,frog-eye-leaf-spot,phytophthora-rot.
+
+(c) Develop a strategy for handling missing data, either by eliminating predictors or imputation.
+
+We can simply drop the rows having missing values. We'll now drop them.
+```{r}
+Soybean_complete <- na.omit(Soybean)
+head(Soybean_complete)
+dim(Soybean_complete)
+```
+After dropping  562 observations remains.
