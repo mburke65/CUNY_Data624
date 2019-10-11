@@ -1,0 +1,140 @@
+---
+title: "Data62_HW4"
+author: "Hantz Angrand"
+date: "October 8, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#I
+Consider the pigs series - the number of pigs slaughtered in Victoria each month.
+Use the ses() function in R to find the optimal values of ?? ?? and ???0, and generate forecasts for the next four months.
+Compute a 95% prediction interval for the first forecast using ^y ± 1.96s
+where s is the standard deviation of the residuals. Compare your interval with the interval produced by R.
+
+```{r}
+#import library fpp2
+library(fpp2)
+```
+
+```{r}
+#using the ses fucntion to find the optimal of ?? and ???0 and generate forecasts
+pigsdata<-window(pigs)
+autoplot(pigsdata) +
+  ylab("Number of pigs slaughtered") +xlab("Year")
+```
+```{r}
+#Estimate parameters
+p_fc<-ses(pigsdata, h=4)
+
+#Summary
+summary(p_fc)
+
+#Plot 
+autoplot(p_fc)
+#Accuracy of one-step-ahead training errors
+round(accuracy(p_fc),2)
+```
+
+```{r}
+#Compute a 95% prediction interval for the first forecast using ^y ± 1.96s
+#where s is the standard deviation of the residuals. Compare your interval with the interval #produced by R.
+
+s<-sd((ses(pigsdata, h=4))$residuals)
+
+ses(pigsdata,h=4)$mean[1]-1.96*s
+
+ses(pigsdata,h=4)$mean[1]+1.96*s
+```
+
+R gives an interval of [78611.97, 119020.8] and by computing the standard deviation of the residuals we got [78679.97, 118952.8].  Both are really close.
+
+#2.-
+Write your own function to implement simple exponential smoothing. The function should take arguments y (the time series), alpha (the smoothing parameter ??) and level (the initial level 
+???0). It should return the forecast of the next observation in the series. Does it give the same forecast as ses()?
+
+```{r}
+SES <- function(y, alpha,l0){
+  yhat<-l0
+  for(i in 1:length(y)){
+    yhat<-alpha*y[i]+(1-alpha)*yhat
+  }
+  writeLines(paste("Next observation by SES function: ", as.character(yhat)))
+ 
+}
+
+alpha<-p_fc$model$par[1]
+l0<-p_fc$model$par[2]
+
+SES(pigs, alpha = alpha, l0=l0)
+
+writeLines(paste(
+
+  "Next observation by ses function: ", as.character(p_fc$mean[1])
+
+  ))
+
+
+```
+
+Both give the same mean.
+
+#3
+Modify your function from the previous exercise to return the sum of squared errors rather than the forecast of the next observation. Then use the optim() function to find the optimal values of ?? and ???0. Do you get the same values as the ses() function?
+
+
+```{r}
+#Modify the function to use the optim function by using vector
+SES <- function(pars=c(alpha, 10), y){
+  err <- 0
+  SSE <- 0
+  alpha <- pars[1]
+  l0 <-pars[2]
+  yhat<- l0
+  
+  for(i in 1:length(y)){
+    err<- y[i]- yhat
+    SSE <- SSE + err^2
+    
+    yhat<-alpha*y[i] +(1-alpha)*yhat
+  }
+  return (SSE)
+  
+}
+
+#Compare ses and SES
+pigs_SES_opt<-optim(par=c(0.3, pigs[1]), y=pigs, fn=SES)
+
+writeLines(paste(
+
+  "Optimal parameters for the result of SES function: ",
+
+  "\n",
+
+  as.character(pigs_SES_opt$par[1]),
+
+  ", ",
+
+  as.character(pigs_SES_opt$par[2]),
+
+  sep = ""
+
+  ))
+
+
+
+writeLines(paste("Result of ses function: ",
+  "\n",   as.character(p_fc$model$par[1]),
+
+  ", ",
+
+  as.character(p_fc$model$par[2]),
+
+  sep = ""
+
+))
+
+```
+
