@@ -1,0 +1,247 @@
+---
+title: "ARIMA Models - HW6"
+---
+##### Chapter 8 HA 8.1, 8.2, 8.6, 8.8
+
+```{r, load-packages, eval=TRUE, include=FALSE}
+library(fpp2)
+```
+
+8.1  Figure 8.31 below shows the ACFs for 36 random numbers, 360 random numbers and 1,000 random numbers.
+
+a) Explain the differences among these figures. Do they all indicate that the data are white noise?
+For white noise series, we expect each autocorrelation to be close to zero with some outliers due to random variation. 
+
+Since x1,x2 & x3 are randomly generated we expect 95% of the spikes in the ACF to lie within ${\pm}2 / {\sqrt(T)}$ where T is the length of the time series. If substantially more than 5% of spikes are outside these bounds, then the series is probably not white noise.
+
+In this example for T in {36,360,1000} the ACF variation should be within the following bounds to be considered white noise.
+
+${\pm}2 / {\sqrt(36)} => {\pm}0.333$  
+${\pm}2 / {\sqrt(360)} = {\pm}0.1054$  
+${\pm}2 / {\sqrt(360)} = {\pm}0.0632$  
+
+The 5% threshold appears contain ~5% ACF spikes for x1, >5% for x2 and <5% for x3.  This suggests that for the x2 timeseries
+there is some autocorrelation that isn't white noise.
+
+![Fig. 8.31](https://otexts.com/fpp2/fpp_files/figure-html/wnacfplus-1.png)
+
+
+* Left: ACF for a white noise series of 36 numbers. 
+
+* Middle: ACF for a white noise series of 360 numbers.  
+
+* Right: ACF for a white noise series of 1,000 numbers. 
+
+
+b) Why are the critical values at different distances from the mean of zero? 
+${\pm}2 / {\sqrt(T)}$ says the test for white noise i.e. significant autocorrelation is dependent on the size of the timeseries.
+The larger the timeseries, the greater the denominator and the smaller the critical value.
+
+c) Why are the autocorrelations different in each figure when they each refer to white noise?
+I suppose the difference in autocorrelations is simply random variation based on the size of the dataset.
+
+8.2  A classic example of a non-stationary series is the daily closing IBM stock price series (data set ibmclose). 
+a) Use R to plot the daily closing prices for IBM stock and the ACF and PACF. 
+
+Daily closing IBM stock price.
+```{r, eval_ts_ibclose, eval=TRUE, include=TRUE}
+data(ibmclose)
+autoplot(ibmclose) +
+  xlab("Days") + ylab("IBM Stock:  Price-per-share")
+
+ibmclose %>% ggtsdisplay(main="ACF & PACF for IBM (non-stationary, non-seasonal, with trend)")
+ibmclose %>% diff %>% ggtsdisplay(main="ACF & PACF for IBM (non-stationary, non-seasonal, with trend removed)")
+```
+
+
+b) Explain how each plot shows that the series is non-stationary and should be differenced.  
+Note that the un-differenced stock price shows a trend which appears not to be random.  What differencing shows is that random variation of changes between consecutive days is random-or closer to being so then the un-differenced stock price.
+
+8.6  Use R to simulate and plot some data from simple ARIMA models.
+
+a) Use the following R code to generate data from an AR(1) model with ${\sigma}^2 = 1$.  The process starts with  $y_{1} = 0$.
+```{r, eval_modela, eval=TRUE, include=TRUE}
+# wrap autoregression in a function
+getAR1_ts <- function(phi ){
+  y <- ts(numeric(100))
+  # a normal distribution has a variance of 1
+  e <- rnorm(100)
+  for(i in 2:100){
+    y[i] <- phi * y[i-1] + e[i]
+  }
+  return(y)
+}
+
+# plot
+autoplot(
+  getAR1_ts(.3)) +
+  xlab("Random Number") +
+  ylab("AR(1) model") 
+```
+
+b) Produce a time plot for the series. How does the plot change as you change ${\theta}_1$? 
+A change in ${\theta}_1$ is directly proportional to variance in the timeseries.
+```{r, eval_modelb, eval=TRUE, include=TRUE}
+getAR1_ts <- function(phi ){
+  y <- ts(numeric(100))
+  # a normal distribution has a variance of 1
+  e <- rnorm(100)
+  for(i in 2:100){
+    y[i] <- phi * y[i-1] + e[i]
+  }
+  return(y)
+}
+
+autoplot(
+  getAR1_ts(.1), series = ".1") +
+  autolayer(getAR1_ts(.5), series = ".5") +
+  autolayer(getAR1_ts(.9), series = ".9") +
+  xlab("Random Number") +
+  ylab("AR(1) models") 
+```
+
+c) Write your own code to generate data from an MA(1) model with ${\theta}_1 = 0.6$ and ${\sigma}^2 = 1$.
+# Wrap Moving Average in a function
+```{r, eval_modelc, eval=TRUE, include=TRUE}
+getMA1_ts <- function(theta){
+  # generate 100 normally distributed datapoints using AR(1) model
+  y <- ts(numeric(100))
+  # error 'e's have variation sigma^2 as 1.
+  e <- rnorm(100)
+  for(i in 2:100){
+    y[i] <- theta * e[i-1] + e[i]
+  }
+  return(y)
+}
+
+autoplot(
+  getMA1_ts(.6)) +
+  xlab("Random Number") +
+  ylab("MA(1) models")
+```
+
+d) Produce a time plot for the series. How does the plot change as you change ${\phi}_1$.
+The timeseries pattern changes but this is hard to discern from the plots.
+```{r, eval_modeld, eval=TRUE, include=TRUE}
+getMA1_ts <- function(theta){
+  y <- ts(numeric(100))
+  # a normal distribution has a variance of 1
+  e <- rnorm(100)
+  for(i in 2:100){
+    y[i] <- theta * e[i-1] + e[i]
+  }
+  return(y)
+}
+
+autoplot(
+  getMA1_ts(.1), series = ".1") +
+  autolayer(getMA1_ts(.5), series = ".5") +
+  autolayer(getMA1_ts(.9), series = ".9") +
+  xlab("Random Number") +
+  ylab("MA(1) models")
+```
+
+e) Generate data from an ARMA(1,1) model with ${\theta}_1 = 0.6$ and ${\phi}_1 = 0.6$ and ${\sigma}^2 = 1$.
+```{r, eval_modele, eval=TRUE, include=TRUE}
+getARMA_ts <- function(begins,theta,phi){
+  # generate 100 normally distributed datapoints using AR(1) model
+  y <- ts(numeric(100))
+  # error 'e's have variation sigma^2 as 1.
+  e <- rnorm(100)
+  for(i in begins:100){
+    y[i] <- theta * y[i-1] + phi * e[i-1] + e[i]
+  }
+  return(y)
+}
+
+autoplot(
+  getARMA_ts(2,.6,.6)) +
+  xlab("Random Number") +
+  ylab("ARMA(1,1) models")
+```
+
+f) Generate data from an AR(2) model with ${\theta}_1 = -0.8$ and ${\phi}_1 = 0.3$ and ${\sigma}^2 = 1$. (Note that these parameters will give a non-stationary series.)
+```{r, eval_modelF, eval=TRUE, include=TRUE}
+getAR_ts <- function(begins,phi1,phi2){
+  # generate 100 normally distributed datapoints using AR(1) model
+  y <- ts(numeric(100))
+  # error 'e's have variation sigma^2 as 1.
+  e <- rnorm(100)
+  for(i in begins:100){
+    y[i] <- phi1 * y[i-1] + phi2 * y[i-2] + e[i]
+  }
+  return(y)
+}
+
+autoplot(
+  getAR_ts(3,-.8,.3)) +
+  xlab("Random Number") +
+  ylab("ARMA(2) models")
+```
+
+g) Graph the latter two series and compare them.
+AR2 oscillates with increasing magnitude while ARMA11 is is linear with minimal variation.
+```{r, eval_modelG, eval=TRUE, include=TRUE}
+autoplot(
+  getARMA_ts(2,.6,.6), series = "AR2") +
+  autolayer(getAR_ts(3,-.8,.3), series = "ARMA11")  +
+  xlab("Random Number") +
+  ylab("AR models")
+```  
+
+8.8  Consider austa, the total international visitors to Australia (in millions) for the period 1980-2015.
+
+a) Use auto.arima() to find an appropriate ARIMA model. What model was selected. Check that the residuals look like white noise. Plot forecasts for the next 10 periods.
+ARIMA(0,1,1) was chosen.  
+```{r, eval_austa_a, eval=TRUE, include=TRUE}
+# plot
+autoplot(austa)
+# forecast and model
+fc_austa <- forecast(auto.arima(austa),h=10)
+fc_austa$model
+```
+
+b) Plot forecasts from an ARIMA(0,1,1) model with no drift and compare these to part a. 
+Remove the MA term and plot again.  
+The for forecasts yield similar results but removing the MA parameter, slightly reduces the range of the forecast.
+Neither plot picks up trend.
+```{r, eval_austa_b, eval=TRUE, include=TRUE}
+fc_austa<-forecast(arima(austa,order =c(0, 1, 1)), h = 10)
+autoplot(fc_austa)
+
+# remove moving average term.
+fc_austa<-forecast(arima(austa,order=c(0, 1, 0)), h = 10)
+autoplot(fc_austa)
+```
+
+c) Plot forecasts from an ARIMA(2,1,3) model with drift. Remove the constant and see what happens.
+The range significantly expands/ 
+```{r, eval_austa_c, eval=TRUE, include=TRUE}
+fc_austa<-forecast(Arima(austa,order =c(2, 1, 3),include.drift=TRUE),h = 10)
+autoplot(fc_austa)
+
+# remove moving average term.
+fc_austa$model$coef[6] <- 0
+fc_austa<-forecast(Arima(austa,order =c(2, 1, 0)),h = 10)
+autoplot(fc_austa)
+
+
+```
+
+d) Plot forecasts from an ARIMA(0,0,1) model with a constant. Remove the MA term and plot again.
+The plot without constant shifts are below trend but with the MA term, the forecast shifts upward.
+The MA still doesn't pick up the trend line though.
+
+```{r, eval_austa_d, eval=TRUE, include=TRUE}
+fc_austa<-forecast(Arima(austa,order=c(0,0,1),include.constant=TRUE),h=10)
+autoplot(fc_austa)
+
+fc_austa<-forecast(Arima(austa,order=c(0,0,0),include.constant=FALSE),h=10)
+autoplot(fc_austa)
+```
+e) Plot forecasts from an ARIMA(0,2,1) model with no constant.
+This plot picks up the trendline and is well fitted.
+```{r, eval_austa_e, eval=TRUE, include=TRUE}
+fc_austa<-forecast(Arima(austa,order=c(0,2,1),include.constant=FALSE),h=10)
+autoplot(fc_austa)
+```
