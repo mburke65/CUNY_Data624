@@ -1,0 +1,161 @@
+---
+title: "Data Pre-processing exercises - HW2"
+output:
+  html_document: 
+    css: more/lab.css
+    highlight: pygments
+    theme: cerulean
+  pdf_document: default
+  word_document: default
+---
+#####Chapter 3 KJ 1 and 2
+
+3.1 Description of the "Glass" data set.
+
+A data frame with 214 observation containing examples of the chemical analysis of 7 different types of glass. The problem is to forecast the type of class on basis of the chemical analysis. The study of classification of types of glass was motivated by criminological investigation. At the scene of the crime, the glass left can be used as evidence (if it is correctly identified!).
+
+
+```{r include=FALSE}
+library(mlbench)
+library(psych)
+library(caret)
+library(PerformanceAnalytics)
+library(pander)
+```
+
+a. Using visualizations explore the predictor variables to understand their distributions as well as the relationships between predictors.
+
+There are a total of 214 glass samples taken with no instances of missing data for any of the predictor variables.  Based upon their histograms and skewness, the predictors RI, Na, Al, Si & Ca display either either a normal distribution pattern or a distribution that could be transformed into a normal distribution pattern i.e. division by sqrt(s).  The remaining predictor variables Mg, K, Ba & Fe display concentrations of 0 frequency.  
+
+b. Do there appear to be any outliers in the data?  Are any predictors skewed?
+
+The existance of concentrations of 0 occurrence without additional information does not indicate an invalid measurement and therefore discarding this data or imputing replacement data would reduce the predictive accuracy of any model based on such action.
+
+c. Are there any relevant transformations of one or more predictors that might improve the classification model?
+
+A better solution to handling the predictors with concentrations of 0 frequency is to use a zero-inflated binary distribution for continuous data.
+
+The two predictors with the greatest correlation are RI and Ca suggesting that in a multivariable regression model, one of these explanatory variables could be removed because it is strongly co-linear with the other thus having little to no loss of predictive ability to the model.
+
+
+
+```{r, eval=TRUE, fig.width=18, fig.height=6}
+data(Glass)
+#pandoc.table(describe(Glass), split.tables=Inf, style='rmarkdown')
+```
+
+|  &nbsp;   | vars |  n  |  mean   |    sd    | median | trimmed |   mad    |  min  |  max  |  range  |  skew   | kurtosis |    se     |
+|:---------:|:----:|:---:|:-------:|:--------:|:------:|:-------:|:--------:|:-----:|:-----:|:-------:|:-------:|:--------:|:---------:|
+|  **RI**   |  1   | 214 |  1.518  | 0.003037 | 1.518  |  1.518  | 0.001875 | 1.511 | 1.534 | 0.02278 |  1.603  |  4.717   | 0.0002076 |
+|  **Na**   |  2   | 214 |  13.41  |  0.8166  |  13.3  |  13.38  |  0.6449  | 10.73 | 17.38 |  6.65   | 0.4478  |  2.898   |  0.05582  |
+|  **Mg**   |  3   | 214 |  2.685  |  1.442   |  3.48  |  2.866  |  0.3039  |   0   | 4.49  |  4.49   | -1.136  | -0.4527  |  0.0986   |
+|  **Al**   |  4   | 214 |  1.445  |  0.4993  |  1.36  |  1.412  |  0.3113  | 0.29  |  3.5  |  3.21   | 0.8946  |  1.938   |  0.03413  |
+|  **Si**   |  5   | 214 |  72.65  |  0.7745  | 72.79  |  72.71  |  0.5708  | 69.81 | 75.41 |   5.6   | -0.7202 |  2.816   |  0.05295  |
+|   **K**   |  6   | 214 | 0.4971  |  0.6522  | 0.555  | 0.4318  |  0.1705  |   0   | 6.21  |  6.21   |  6.46   |  52.87   |  0.04458  |
+|  **Ca**   |  7   | 214 |  8.957  |  1.423   |  8.6   |  8.742  |  0.6598  | 5.43  | 16.19 |  10.76  |  2.018  |   6.41   |  0.09728  |
+|  **Ba**   |  8   | 214 |  0.175  |  0.4972  |   0    | 0.03378 |    0     |   0   | 3.15  |  3.15   |  3.369  |  12.08   |  0.03399  |
+|  **Fe**   |  9   | 214 | 0.05701 | 0.09744  |   0    | 0.03581 |    0     |   0   | 0.51  |  0.51   |  1.73   |   2.52   | 0.006661  |
+| **Type*** |  10  | 214 |  2.542  |  1.708   |   2    |  2.308  |  1.483   |   1   |   6   |    5    |  1.038  | -0.2871  |  0.1167   |
+
+```{r, eval=TRUE, echo=FALSE}
+#ZERO-INFLATED NEGATIVE BINOMIAL for Mg, Ba & Fe or is it a nuanced distribution
+par(mfrow = c(3,3))
+hist(Glass[,'RI'],breaks=50)
+hist(Glass[,'Na'],breaks=50)
+hist(Glass[,'Mg'],breaks=50)
+hist(Glass[,'Al'],breaks=50)
+hist(Glass[,'Si'],breaks=50)
+hist(Glass[,'K'],breaks=50)
+hist(Glass[,'Ca'],breaks=50)
+hist(Glass[,'Ba'],breaks=50)
+hist(Glass[,'Fe'],breaks=50)
+```
+
+Correlation Matrix
+
+| &nbsp; |    RI     |    Na    |    Mg    |    Al     |    Si     |     K     |   Ca    |    Ba     |    Fe     |
+|:------:|:---------:|:--------:|:--------:|:---------:|:---------:|:---------:|:-------:|:---------:|:---------:|
+| **RI** |     1     | -0.1919  | -0.1223  |  -0.4073  |  -0.5421  |  -0.2898  | 0.8104  | -0.000386 |   0.143   |
+| **Na** |  -0.1919  |    1     | -0.2737  |  0.1568   | -0.06981  |  -0.2661  | -0.2754 |  0.3266   |  -0.2413  |
+| **Mg** |  -0.1223  | -0.2737  |    1     |  -0.4818  |  -0.1659  | 0.005396  | -0.4438 |  -0.4923  |  0.08306  |
+| **Al** |  -0.4073  |  0.1568  | -0.4818  |     1     | -0.005524 |   0.326   | -0.2596 |  0.4794   |  -0.0744  |
+| **Si** |  -0.5421  | -0.06981 | -0.1659  | -0.005524 |     1     |  -0.1933  | -0.2087 |  -0.1022  |  -0.0942  |
+| **K**  |  -0.2898  | -0.2661  | 0.005396 |   0.326   |  -0.1933  |     1     | -0.3178 | -0.04262  | -0.007719 |
+| **Ca** |  0.8104   | -0.2754  | -0.4438  |  -0.2596  |  -0.2087  |  -0.3178  |    1    |  -0.1128  |   0.125   |
+| **Ba** | -0.000386 |  0.3266  | -0.4923  |  0.4794   |  -0.1022  | -0.04262  | -0.1128 |     1     | -0.05869  |
+| **Fe** |   0.143   | -0.2413  | 0.08306  |  -0.0744  |  -0.0942  | -0.007719 |  0.125  | -0.05869  |     1     | 
+
+```{r, eval=TRUE, echo=FALSE}
+nearZeroVar(Glass)
+my_df <- data.frame(Glass[,1:9])
+#pandoc.table(cor(my_df), split.tables=Inf, style='rmarkdown')
+chart.Correlation(my_df, histogram=TRUE, pch=19)
+```
+
+3.2 Description of the "Soybean" data set.
+
+There are 19 classes, only the first 15 of which have been used in prior work. The folklore seems to be that the last four classes are unjustified by the data since they have so few examples. There are 35 categorical attributes, some nominal and some ordered. The value “dna” means does not apply. The values for attributes are encoded numerically, with the first value encoded as “0,” the second as “1,” and so forth.
+
+a. Investigate the frequency distributions for the categorical predictors.  Are any of the distributions degenrate in ways discussed earlier in this chapter?
+
+
+b. Roughly 18% of the data are missing.  Are there particular predictors that are more likely to be missing?  Is the pattern of missing data related to the classes?
+
+c. Develop a strategy for handling missing data, either by eliminating predictors or imputation.
+
+
+
+```{r, eval=TRUE, fig.width=18, fig.height=6}
+data(Soybean)
+pandoc.table(describe(Soybean), split.tables=Inf, style='rmarkdown')
+```
+
+|  &nbsp;   | vars |  n  |  mean   |    sd    | median | trimmed |   mad    |  min  |  max  |  range  |  skew   | kurtosis |    se     |
+|:---------:|:----:|:---:|:-------:|:--------:|:------:|:-------:|:--------:|:-----:|:-----:|:-------:|:-------:|:--------:|:---------:|
+|  **RI**   |  1   | 214 |  1.518  | 0.003037 | 1.518  |  1.518  | 0.001875 | 1.511 | 1.534 | 0.02278 |  1.603  |  4.717   | 0.0002076 |
+|  **Na**   |  2   | 214 |  13.41  |  0.8166  |  13.3  |  13.38  |  0.6449  | 10.73 | 17.38 |  6.65   | 0.4478  |  2.898   |  0.05582  |
+|  **Mg**   |  3   | 214 |  2.685  |  1.442   |  3.48  |  2.866  |  0.3039  |   0   | 4.49  |  4.49   | -1.136  | -0.4527  |  0.0986   |
+|  **Al**   |  4   | 214 |  1.445  |  0.4993  |  1.36  |  1.412  |  0.3113  | 0.29  |  3.5  |  3.21   | 0.8946  |  1.938   |  0.03413  |
+|  **Si**   |  5   | 214 |  72.65  |  0.7745  | 72.79  |  72.71  |  0.5708  | 69.81 | 75.41 |   5.6   | -0.7202 |  2.816   |  0.05295  |
+|   **K**   |  6   | 214 | 0.4971  |  0.6522  | 0.555  | 0.4318  |  0.1705  |   0   | 6.21  |  6.21   |  6.46   |  52.87   |  0.04458  |
+|  **Ca**   |  7   | 214 |  8.957  |  1.423   |  8.6   |  8.742  |  0.6598  | 5.43  | 16.19 |  10.76  |  2.018  |   6.41   |  0.09728  |
+|  **Ba**   |  8   | 214 |  0.175  |  0.4972  |   0    | 0.03378 |    0     |   0   | 3.15  |  3.15   |  3.369  |  12.08   |  0.03399  |
+|  **Fe**   |  9   | 214 | 0.05701 | 0.09744  |   0    | 0.03581 |    0     |   0   | 0.51  |  0.51   |  1.73   |   2.52   | 0.006661  |
+| **Type*** |  10  | 214 |  2.542  |  1.708   |   2    |  2.308  |  1.483   |   1   |   6   |    5    |  1.038  | -0.2871  |  0.1167   |
+
+```{r, eval=TRUE, echo=FALSE}
+#ZERO-INFLATED NEGATIVE BINOMIAL for Mg, Ba & Fe or is it a nuanced distribution
+par(mfrow = c(3,3))
+hist(Glass[,'RI'],breaks=50)
+hist(Glass[,'Na'],breaks=50)
+hist(Glass[,'Mg'],breaks=50)
+hist(Glass[,'Al'],breaks=50)
+hist(Glass[,'Si'],breaks=50)
+hist(Glass[,'K'],breaks=50)
+hist(Glass[,'Ca'],breaks=50)
+hist(Glass[,'Ba'],breaks=50)
+hist(Glass[,'Fe'],breaks=50)
+```
+
+Correlation Matrix
+
+| &nbsp; |    RI     |    Na    |    Mg    |    Al     |    Si     |     K     |   Ca    |    Ba     |    Fe     |
+|:------:|:---------:|:--------:|:--------:|:---------:|:---------:|:---------:|:-------:|:---------:|:---------:|
+| **RI** |     1     | -0.1919  | -0.1223  |  -0.4073  |  -0.5421  |  -0.2898  | 0.8104  | -0.000386 |   0.143   |
+| **Na** |  -0.1919  |    1     | -0.2737  |  0.1568   | -0.06981  |  -0.2661  | -0.2754 |  0.3266   |  -0.2413  |
+| **Mg** |  -0.1223  | -0.2737  |    1     |  -0.4818  |  -0.1659  | 0.005396  | -0.4438 |  -0.4923  |  0.08306  |
+| **Al** |  -0.4073  |  0.1568  | -0.4818  |     1     | -0.005524 |   0.326   | -0.2596 |  0.4794   |  -0.0744  |
+| **Si** |  -0.5421  | -0.06981 | -0.1659  | -0.005524 |     1     |  -0.1933  | -0.2087 |  -0.1022  |  -0.0942  |
+| **K**  |  -0.2898  | -0.2661  | 0.005396 |   0.326   |  -0.1933  |     1     | -0.3178 | -0.04262  | -0.007719 |
+| **Ca** |  0.8104   | -0.2754  | -0.4438  |  -0.2596  |  -0.2087  |  -0.3178  |    1    |  -0.1128  |   0.125   |
+| **Ba** | -0.000386 |  0.3266  | -0.4923  |  0.4794   |  -0.1022  | -0.04262  | -0.1128 |     1     | -0.05869  |
+| **Fe** |   0.143   | -0.2413  | 0.08306  |  -0.0744  |  -0.0942  | -0.007719 |  0.125  | -0.05869  |     1     | 
+
+```{r, eval=TRUE, echo=FALSE}
+nearZeroVar(Glass)
+my_df <- data.frame(Glass[,1:9])
+#pandoc.table(cor(my_df), split.tables=Inf, style='rmarkdown')
+chart.Correlation(my_df, histogram=TRUE, pch=19)
+```
+
+
