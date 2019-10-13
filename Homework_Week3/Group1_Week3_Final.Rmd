@@ -1,0 +1,112 @@
+---
+title: 'Data 624: Week 3 Homework'
+author: "Angrand, Burke, Deboch, Groysman, Karr"
+date: "October 12, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+### Week 3 Assignment 
+
+
+**Chapter 3 KJ 1 and 2**
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(mlbench)
+library(psych)
+library(caret)
+library(PerformanceAnalytics)
+library(pander)
+```
+
+##### 3.1 The UC Irvine Machine Learning Repository contains a data set related to glass identification. The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe. The data can be accessed via:
+
+```{r, eval=TRUE, fig.width=18, fig.height=6}
+data(Glass)
+describe(Glass)
+cormat(Glass)
+```
+
+  - A data frame with 214 observation containing examples of the chemical analysis of 7 different types of glass. The problem is to forecast the type of class on basis of the chemical analysis. The study of classification of types of glass was motivated by criminological investigation. At the scene of the crime, the glass left can be used as evidence (if it is correctly identified!).
+
+
+
+  **a.** Using visualizations explore the predictor variables to understand their distributions as well as the relationships between predictors.
+
+```{r, eval=TRUE, echo=FALSE}
+#ZERO-INFLATED NEGATIVE BINOMIAL for Mg, Ba & Fe or is it a nuanced distribution
+par(mfrow = c(3,3))
+hist(Glass[,'RI'],breaks=50)
+hist(Glass[,'Na'],breaks=50)
+hist(Glass[,'Mg'],breaks=50)
+hist(Glass[,'Al'],breaks=50)
+hist(Glass[,'Si'],breaks=50)
+hist(Glass[,'K'],breaks=50)
+hist(Glass[,'Ca'],breaks=50)
+hist(Glass[,'Ba'],breaks=50)
+hist(Glass[,'Fe'],breaks=50)
+```
+**Correlation Matrix**
+
+| &nbsp; |    RI     |    Na    |    Mg    |    Al     |    Si     |     K     |   Ca    |    Ba     |    Fe     |
+|:------:|:---------:|:--------:|:--------:|:---------:|:---------:|:---------:|:-------:|:---------:|:---------:|
+| **RI** |     1     | -0.1919  | -0.1223  |  -0.4073  |  -0.5421  |  -0.2898  | 0.8104  | -0.000386 |   0.143   |
+| **Na** |  -0.1919  |    1     | -0.2737  |  0.1568   | -0.06981  |  -0.2661  | -0.2754 |  0.3266   |  -0.2413  |
+| **Mg** |  -0.1223  | -0.2737  |    1     |  -0.4818  |  -0.1659  | 0.005396  | -0.4438 |  -0.4923  |  0.08306  |
+| **Al** |  -0.4073  |  0.1568  | -0.4818  |     1     | -0.005524 |   0.326   | -0.2596 |  0.4794   |  -0.0744  |
+| **Si** |  -0.5421  | -0.06981 | -0.1659  | -0.005524 |     1     |  -0.1933  | -0.2087 |  -0.1022  |  -0.0942  |
+| **K**  |  -0.2898  | -0.2661  | 0.005396 |   0.326   |  -0.1933  |     1     | -0.3178 | -0.04262  | -0.007719 |
+| **Ca** |  0.8104   | -0.2754  | -0.4438  |  -0.2596  |  -0.2087  |  -0.3178  |    1    |  -0.1128  |   0.125   |
+| **Ba** | -0.000386 |  0.3266  | -0.4923  |  0.4794   |  -0.1022  | -0.04262  | -0.1128 |     1     | -0.05869  |
+| **Fe** |   0.143   | -0.2413  | 0.08306  |  -0.0744  |  -0.0942  | -0.007719 |  0.125  | -0.05869  |     1     | 
+
+```{r, eval=TRUE, echo=FALSE}
+nearZeroVar(Glass)
+my_df <- data.frame(Glass[,1:9])
+#pandoc.table(cor(my_df), split.tables=Inf, style='rmarkdown')
+chart.Correlation(my_df, histogram=TRUE, pch=19)
+```
+ 
+  - There are a total of 214 glass samples taken with no instances of missing data for any of the predictor variables.  Based upon their histograms and skewness, the predictors RI, Na, Al, Si & Ca display either either a normal distribution pattern or a distribution that could be transformed into a normal distribution pattern i.e. division by sqrt(s).  The remaining predictor variables Mg, K, Ba & Fe display concentrations of 0 frequency.  
+
+
+
+  **b.** Do there appear to be any outliers in the data?  Are any predictors skewed?
+
+  - The existance of concentrations of 0 occurrence without additional information does not indicate an invalid measurement and therefore discarding this data or imputing replacement data would reduce the predictive accuracy of any model based on such action.
+
+  **c.** Are there any relevant transformations of one or more predictors that might improve the classification model?
+
+  - A better solution to handling the predictors with concentrations of 0 frequency is to use a zero-inflated binary distribution for continuous data. The two predictors with the greatest correlation are RI and Ca suggesting that in a multivariable regression model, one of these explanatory variables could be removed because it is strongly co-linear with the other thus having little to no loss of predictive ability to the model.
+
+
+
+##### 3.2 The soybean data can also be found at the UC Irvine Machine Learning Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmental conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct classes.
+
+```{r, eval=TRUE, fig.width=18, fig.height=6}
+#Preliminary EDA
+#Data Access
+data(Soybean)
+#Sampling
+head(Soybean)
+#Shape
+dim(Soybean)
+#Stats 
+describe(Soybean)
+```
+
+
+  - There are 19 classes, only the first 15 of which have been used in prior work. There are 35 categorical attributes, some nominal and some ordered. The value "dna" means does not apply. The values for attributes are encoded numerically, with the first value encoded as "0," the second as "1," etc.
+
+**a.** Investigate the frequency distributions for the categorical predictors.  Are any of the distributions degenrate in ways discussed earlier in this chapter?
+
+
+**b.** Roughly 18% of the data are missing.  Are there particular predictors that are more likely to be missing?  Is the pattern of missing data related to the classes?
+
+**c.** Develop a strategy for handling missing data, either by eliminating predictors or imputation.
+
+
+
