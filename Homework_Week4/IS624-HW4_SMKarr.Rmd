@@ -1,0 +1,83 @@
+---
+title: "Exponential Smoothing - HW5"
+---
+##### Chapter 7 HA 7.1, 7.3
+
+```{r, load_libraries, eval=TRUE, include=FALSE}
+library(fpp2)
+data(pigs)
+```
+
+7.1 Consider the **pigs** series — the number of pigs slaughtered in Victoria each month.
+The pigs ts contains monthly total number of pigs slaughtered in Victoria, Australia (Jan 1980 – Aug 1995).
+
+a)  Use the **ses()** function in R to find the optimal values of ${\alpha}$ and ${\ell}_{0}$, and generate forecasts for the next four months.
+
+b)  Compute a 95% prediction interval for the first forecast using $\hat{y} {\pm} 1.96s$
+  is the standard deviation of the residuals. Compare your interval with the interval produced by R.
+
+```{r, problem_7_1, eval=TRUE, include=TRUE}
+# Get timeseries
+pigs_ts<-pigs
+# Get forecasted estimate parameters from model
+round(ses(pigs_ts, h=4)$model$par[1:2],4)
+# Forecast out 4 months for visibility on graph
+fc_pigs_ses<-ses(pigs_ts, h=4)
+# Accuracy of one-step-ahead training errors
+round(accuracy(fc_pigs_ses),2)
+# see how SES model was fitted
+fc_pigs_ses$model
+# get 1st 4 months of forecasts
+tsCV(pigs_ts,ses,h=4)[1:4,]
+# 95% prediction interval for the first forecast
+fc_pigs_ses$upper[1, "95%"]
+fc_pigs_ses$lower[1, "95%"]
+# calculate standard deviation with and without model
+s <- sd(fc_pigs_ses$residuals)
+s
+# s = 10273.69 vs s (estimated) 10308.58
+# calculate 95% prediction interval with and without model
+fc_pigs_ses$mean[1] + 1.96*s
+fc_pigs_ses$mean[1] - 1.96*s
+mean(pigs_ts) + 1.96*s
+mean(pigs_ts)  - 1.96*s
+```
+
+
+```{r, plot_pigs, eval=TRUE, include=TRUE}
+# Note that forecast using ses doesn't have a trend component.
+fc_pigs_ses<-ses(pigs_ts, h=100)
+autoplot(fc_pigs_ses) + 
+    autolayer(fitted(fc_pigs_ses), series="fitted") +
+    ylab("Total number of Pigs slaughtered in Victoria, Austrailia") + xlab("Jan 1980 – Aug 1995")
+```
+
+
+7.3 Modify your function from the previous exercise to return the sum of squared errors rather than the forecast of the next observation. Then use the **optim()** function to find the optimal values of ${\alpha}$ and ${\ell}_{0}$.
+
+Do you get the same values as the **ses()** function?
+my_ses_func returns an l value that is ~.01% different then the ses function.
+##      alpha          l 
+##     0.2971 77269.3253
+##      alpha          l 
+##     0.2971 77260.0561
+```{r echo=FALSE, message=FALSE, warning=FALSE, Question3}
+# modify ses function to return SSE
+my_ses_func <- function(pars=c(alpha, level), y){
+  Err <- 0
+  SSE <- 0 # calculation varies from 
+  for(i in 1:length(y)){
+    Err <- y[i] - pars[2]
+    SSE <- SSE + Err^2
+    pars[2] <- pars[1] * y[i] + (1 - pars[1]) * pars[2]
+  }
+  return(SSE)
+}
+
+# compare ses and my_ses_fun output using the 
+opt_ses_pigs <- optim(par = c(alpha = 0.2971, l = pigs_ts[1]), y = pigs_ts, fn = my_ses_func)
+
+round(opt_ses_pigs$par,4)
+round(fc_pigs_ses$model$par,4)
+```
+  

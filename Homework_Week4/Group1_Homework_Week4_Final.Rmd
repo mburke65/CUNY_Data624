@@ -1,0 +1,124 @@
+---
+title: 'Data 624: Week 4 Homework'
+author: "Angrand, Burke, Deboch, Groysman, Karr"
+date: "October 12, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+### Week 4 Assignment 
+
+
+**Chapter 7 HA 7.1, 7.3**
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp2)
+
+```
+
+#####  7.1 Consider the **pigs** series - the number of pigs slaughtered in Victoria each month.
+The pigs ts contains monthly total number of pigs slaughtered in Victoria, Australia (Jan 1980 to Aug 1995).
+
+```{r, eval=TRUE}
+#sampling and shape of dataset, preliminary EDA
+head(pigs)
+
+#autoplot the series
+pigsdata<-window(pigs)
+autoplot(pigsdata) +
+  ylab("Number of pigs slaughtered") +xlab("Year")
+```
+
+
+
+
+  **a.** Use the **ses()** function in R to find the optimal values of ${\alpha}$ and ${\ell}_{0}$, and generate forecasts for the next four months.
+  
+```{r, eval=TRUE}
+#Estimate parameters
+fc_pigs_ses<-ses(pigsdata, h=4)
+
+
+
+#Get forecasted estimate parameters from model -(alpha and l)
+round(fc_pigs_ses$model$par[1:2],4)
+
+#generate 4 months of forecasts 
+data.frame(fc_pigs_ses)
+
+#Accuracy of one-step-ahead training errors
+round(accuracy(fc_pigs_ses),2)
+
+# see how SES model was fitted
+fc_pigs_ses$model
+
+# get 1st 4 months of forecasts
+tsCV(pigs,ses,h=4)[1:4,]
+
+#Plot (Note that forecast using ses doesn't have a trend component.)
+fc_pigs_ses<-ses(pigs, h=100)
+autoplot(fc_pigs_ses) + 
+    autolayer(fitted(fc_pigs_ses), series="fitted") +
+    ylab("Total number of Pigs slaughtered in Victoria, Austrailia") + xlab("Jan 1980 to Aug 1995")
+```
+
+
+  **b.** Compute a 95% prediction interval for the first forecast using $\hat{y} {\pm} 1.96s$
+  is the standard deviation of the residuals. Compare your interval with the interval produced by R.
+
+```{r, problem_7_1, eval=TRUE, include=TRUE}
+# 95% prediction interval for the first forecast
+
+lower.upper <- data.frame( fc_pigs_ses$lower[1, "95%"], fc_pigs_ses$upper[1, "95%"])
+names(lower.upper)<- c("lower.limit", "upper.limit")
+lower.upper
+
+
+# calculate standard deviation of residuals with and without model, s = 10273.69 vs s (estimated) 10308.58
+s <- sd(fc_pigs_ses$residuals)
+print(paste("Standard Deviation: ",round(s,2)))
+
+
+# calculate 95% prediction interval with model
+pred.interval.model<- data.frame(fc_pigs_ses$mean[1] - 1.96*s,fc_pigs_ses$mean[1] + 1.96*s)
+names(pred.interval.model)<- c("Lower.Model", "Upper.Model")
+pred.interval.model
+
+# calculate 95% prediction interval without model
+pred.interval.womodel<- data.frame(mean(pigs)  - 1.96*s, mean(pigs) + 1.96*s)
+names(pred.interval.womodel)<- c("Lower.NOModel", "Upper.NOModel")
+pred.interval.womodel
+```
+
+  - R gives an interval of [78611.97, 119020.8] and by computing the standard deviation of the residuals we got [78679.97, 118952.8].  Both are really close.
+
+
+
+
+#####  7.3 Modify your function from the previous exercise to return the sum of squared errors rather than the forecast of the next observation. Then use the **optim()** function to find the optimal values of ${\alpha}$ and ${\ell}_{0}$. Do you get the same values as the **ses()** function?
+
+  - my_ses_func returns an l value that is ~.01% different then the ses function.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Question3}
+# modify ses function to return SSE
+my_ses_func <- function(pars=c(alpha, level), y){
+  Err <- 0
+  SSE <- 0 # calculation varies from 
+  for(i in 1:length(y)){
+    Err <- y[i] - pars[2]
+    SSE <- SSE + Err^2
+    pars[2] <- pars[1] * y[i] + (1 - pars[1]) * pars[2]
+  }
+  return(SSE)
+}
+
+# compare ses and my_ses_fun output using the 
+opt_ses_pigs <- optim(par = c(alpha = 0.2971, l = pigs[1]), y = pigs, fn = my_ses_func)
+
+round(opt_ses_pigs$par,4)
+round(fc_pigs_ses$model$par,4)
+```
+  
