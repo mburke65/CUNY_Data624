@@ -1,0 +1,291 @@
+---
+title: 'Data 624: Week 5 Homework'
+author: "Angrand, Burke, Deboch, Groysman, Karr"
+date: "October 12, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+### Week 5 Assignment 
+
+**Chapter 7 HA 7.5, 7.6 and 7.10**
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp2)
+library(gridExtra)
+
+```
+
+
+##### 7.5 Forecast the next four days of paperback and hardcover books using the data set *books* which contains the same store daily sales data for paperback and hardcover books.
+
+The problem set uses the books timeseries which contains 30 observations of same-store hardback and paperback sales.
+
+
+```{r, eval=TRUE}
+#sampling and shape of dataset, preliminary EDA
+head(books)
+dim(books)
+```
+
+
+  **a.**  Plot the series and discuss its main features.  
+  
+- This shows the 30 day timeseries for both types of books by number sold. Visually, the main features of the data are the positive trend and a seasonality pattern of approximately every three days (up/down).
+
+```{r, load_and_plot_books_ses, eval=TRUE, fig.width=18, fig.height=6}
+data(books)
+autoplot(books) +
+  ylab("back books #sold") + xlab("days")+ ggtitle("Daily Book Sales")
+```
+
+
+
+
+
+
+  **b.**  Uses the ses() function to forecast each series and plot the forecasts.
+  
+  - Separate the paperback and hardback sales into distinct timeseries (books[,1], books[,2])
+
+  - Run the Simple Exponential Smoothing (SES) function against both hardbacks and paperbacks for h=4 or 4 days period of forecasting
+    - The ses() function returns forecasts and metadata for exponential smoothing forecasts applied each timeseries 
+    
+  - Rounded the training errors and plotted the series
+
+```{r, apply_ses_to_books, eval=TRUE, fig.width=18, fig.height=6}
+#1) create distinct timeseries
+paperback_books_ts<-books[,1]
+hardback_books_ts<-books[,2]
+
+#2) Estimate parameters
+fc_pb_ses<-ses(paperback_books_ts, h=4)
+fc_hb_ses<-ses(hardback_books_ts, h=4)
+
+data.frame(fc_pb_ses)
+data.frame(fc_hb_ses)
+```
+
+```{r, plot_ses_predictions, eval=TRUE, fig.width=18, fig.height=6}
+autoplot(fc_pb_ses) +
+  autolayer(fitted(fc_pb_ses),series="Fitted") +
+  ylab("Paperbacks sold") + xlab("days")
+
+autoplot(fc_hb_ses) +
+  autolayer(fitted(fc_hb_ses),series="Fitted") +
+  ylab("Hardbacks sold") + xlab("days")
+```
+
+
+  **c.**  Compute the RMSE values for the training data in each case.
+
+  - The accuracy function returns a range of summary measures of the forecast accuracy including Root Mean Square Error. for each training data timeseries including RMSE.  For paperbacks books RMSE=33.64 and for hardback books RMSE=31.93.
+
+```{r, rsmeevalses, eval=TRUE}
+
+#3) Accuracy of one-step-ahead training errors paperback
+round(accuracy(fc_pb_ses),2)
+
+#4) Accuracy of one-step-ahead training errors hardback
+round(accuracy(fc_hb_ses),2)
+```
+
+
+##### 7.6 (a continuation of problem 7.5)
+
+  **a.** Now apply Holt's linear method to the paperback and hardback series and compute four-day forecasts in each case.  
+
+  - The Holt method uses h=4 (4 days) as input parameters projecting a 4 day forecast.
+  
+```{r}
+# repeat with holt() functiobn, same params as ses()
+fc_pb_holt<-holt(paperback_books_ts, h=4)
+fc_hb_holt<-holt(hardback_books_ts, h=4)
+
+data.frame(fc_pb_holt)
+data.frame(fc_hb_holt)
+```
+  
+```{r, eval=TRUE, fig.width=18, fig.height=6}
+autoplot(fc_pb_holt) +
+  autolayer(fitted(fc_pb_holt),series="Fitted") +
+  ylab("Paperbacks sold") + xlab("days")
+
+autoplot(fc_hb_holt) +
+  autolayer(fitted(fc_hb_holt),series="Fitted") +
+  ylab("Hardbacks sold") + xlab("days")
+``` 
+  
+  
+  
+
+  **b.** Compare the RMSE measures of Holt's method for the two series to those of simple exponential smoothing in the previous question.  (Remember that Holt's method is using one more parameter than SES.)  Discuss the merits of the two forecasting methods for these data sets.
+  
+
+```{r, eval=TRUE}
+
+#HOLT Accuracy of one-step-ahead training errors paperback
+round(accuracy(fc_pb_holt),2)
+
+#SES Accuracy of one-step-ahead training errors paperback
+round(accuracy(fc_pb_ses),2)
+
+
+#HOLT Accuracy of one-step-ahead training errors hardback
+round(accuracy(fc_hb_holt),2)
+
+#SES Accuracy of one-step-ahead training errors hardback
+round(accuracy(fc_hb_ses),2)
+```
+
+  - The holt series yields an RMSE of 31.14 for paperback books and 27.19 for hardback books. The ses series yields an RMSE of 33.64 for paperback books and 31.93 for hardback books. The smaller value of RMSE for hardback books indicates a better fit for both series using the Holt method. Using both methods hardbacks yield a lower RMSE which indicates a better fit then paperbacks. It appears that by extending the SES method with a trend equation for forecasting, the overall fit of the Holt method is      an improvement over the SES method, presumably where the data being examined has a clear trend. 
+    
+
+
+  **c.**  Compare the forecasts for the two series using both methods.  Which do you think is best?
+
+  - The RMSE is smaller for the paperback book data and therefore better fitted using the holt model.  The trend line from the training data to the predictions does seem to extrapolate more accurately as well.
+
+  **d.** Calculate a 95% prediction interval for the first forecast for each series, using RMSE values and assuming normal errors.  Compare your intervals with those produced using ses and holt.
+
+  - Note the 95% confidence intervals for the ses method have a greater range then that of the holt method for these predictions.The Holt 95% prediction interval for the 1st forecast of the paperback timeseries is between 149.69 and 265.45 and the Holt 95% prediction interval for the 1st forecast of the hardback timeseries is between 197.78 and 293.05. This compares with the ses 95% prediction interval for the 1st forecast of the paperback timeseries is between 135.96 and 277.16 and the ses 95% prediction interval for the 1st forecast of the hardback timeseries is between 197.78 and 293.05.
+
+```{r, eval=TRUE}
+head(data.frame(holt(paperback_books_ts,bootstrap=TRUE)),1)
+head(data.frame(ses(paperback_books_ts,bootstrap=TRUE)),1)
+head(data.frame(holt(hardback_books_ts,bootstrap=TRUE)),1)
+head(data.frame(ses(hardback_books_ts,bootstrap=TRUE)),1)
+
+```
+
+  - The tsCV function computes the forecast errors obtained by applying forecast function to subsets of the time series   paperback_books_ts and hardback_books_ts using a rolling forecast origin. 
+
+
+```{r, evaluate_holt_for_book_series, eval=TRUE, fig.width=18, fig.height=6}
+#get the tsCV for each model
+e1<-tsCV(paperback_books_ts,ses,h=4)
+e2<-tsCV(paperback_books_ts,holt,h=4)
+e3<-tsCV(paperback_books_ts,holt,damped=TRUE,h=4)
+e4<-tsCV(hardback_books_ts,ses,h=4)
+e5<-tsCV(hardback_books_ts,holt,h=4)
+e6<-tsCV(hardback_books_ts,holt, damped=TRUE,h=4)
+
+#Compare MSE for paperbacks:
+mse.pb <- data.frame(mean(e1^2,na.rm=TRUE),mean(e2^2,na.rm=TRUE),mean(e3^2,na.rm=TRUE))
+names(mse.pb)<- c("mse.pb.ses", "mse.pb.holt", "mse.pb.holt.damped")
+mse.pb
+#Compare MSE for hardbacks
+mse.hb <- data.frame(mean(e4^2,na.rm=TRUE),mean(e5^2,na.rm=TRUE),mean(e6^2,na.rm=TRUE))
+names(mse.hb)<- c("mse.hb.ses", "mse.hb.holt", "mse.hb.holt.damped")
+mse.hb
+
+```
+
+  - display Holt model summary
+```{r, build_holt_models, eval=TRUE, fig.width=18, fig.height=6}
+fc_pb_holt<-holt(paperback_books_ts,h=4)
+fc_hb_holt<-holt(hardback_books_ts,h=4)
+
+fc_pb_holt[["model"]]
+ 
+fc_hb_holt[["model"]]
+
+```
+  - Plot Holt model summary forecasts
+```{r, plot_holt_predictions, eval=TRUE, fig.width=18, fig.height=6}
+autoplot(fc_pb_holt) +
+  autolayer(fitted(fc_pb_holt),series="Fitted") +
+  ylab("Paperbacks sold") + xlab("days")
+
+autoplot(fc_hb_holt) +
+  autolayer(fitted(fc_hb_holt),series="Fitted") +
+  ylab("Hardbacks sold") + xlab("days")
+```
+
+```{r, evaluate_holt2ses_error, eval=TRUE, fig.width=18, fig.height=6}
+round(accuracy(fc_pb_holt),2)
+round(accuracy(fc_hb_holt),2)
+round(accuracy(fc_pb_holt,damped=TRUE),2)
+round(accuracy(fc_hb_holt,damped=TRUE),2)
+
+```
+
+##### 7.7 For this exercise use data set eggs, the price of a dozen eggs in the United States from 1900-1993. 
+
+  **a.** Experiment with the various options in the holt() function to see how much the forecasts change with damped trend or Box-Cox transformation.
+  
+```{r, plot_eggs_ts, eval=TRUE, fig.width=18, fig.height=6}
+data(eggs)
+hist(eggs,breaks=100)
+#Price of dozen eggs in US, 1900 to 1993, in constant dollars.
+autoplot(eggs) +
+  ylab("Price of dozen eggs (constant $)") + xlab("years")
+
+lambda<-BoxCox.lambda(eggs)
+autoplot(BoxCox(eggs,lambda)) +
+  ylab("Price of dozen eggs (constant $)") + xlab("years")
+```
+
+  **b.** Try to develop an intuition of what each argument is doing to the forecasts.  [Hint:  use h=100 when calling holt() so you can clearly see the differences between the various options when plotting the forecasts.]
+
+- MSE Evaluations
+```{r, evaluate_holt_for_eggs_series, eval=TRUE, fig.width=18, fig.height=6}
+e1<-tsCV(eggs,ses,h=100)
+e2<-tsCV(eggs,holt,h=100)
+e3<-tsCV(eggs,holt,damped=TRUE,h=100)
+
+#Compare MSE for eggs:
+mse.eggs <- data.frame(mean(e1^2,na.rm=TRUE), mean(e2^2,na.rm=TRUE),mean(e3^2,na.rm=TRUE))
+names(mse.eggs)<- c("mse.ses", "mse.holt", "mse.holt.damped")
+mse.eggs
+```
+- Model Components Summary
+```{r, build_prediction_models, eval=TRUE, fig.width=18, fig.height=6}
+fc_eggs_ses<-ses(eggs,h=100)
+fc_eggs_holt<-holt(eggs,h=100)
+fc_eggs_holt_damped<-holt(eggs,damped=TRUE,h=100)
+  
+# Build Models
+fc_eggs_ses[["model"]]
+fc_eggs_holt[["model"]]
+fc_eggs_holt_damped[["model"]]
+```
+
+- Plot Forecasts
+```{r, plot_predictions, eval=TRUE, fig.width=18, fig.height=6}
+#plot forecasts predictions 
+autoplot(fc_eggs_ses) +
+  autolayer(fitted(fc_eggs_ses),series="Fitted") +
+  ylab("Dozen Eggs Sold") + xlab("years")
+
+autoplot(fc_eggs_holt) +
+  autolayer(fitted(fc_eggs_holt),series="Fitted") +
+  ylab("Dozen Eggs Sold") + xlab("years")
+
+autoplot(fc_eggs_holt_damped) +
+  autolayer(fitted(fc_eggs_holt_damped),series="Fitted") +
+  ylab("Dozen Eggs Sold") + xlab("years")
+
+fc_eggs_BC<-rwf(eggs,drift=TRUE,lambda=0,h=100,level=80)
+fc2_eggs_BC<-rwf(eggs,drift=TRUE,lambda=0,h=100,level=80,biasadj=TRUE)
+
+autoplot(eggs) +
+  autolayer(fc_eggs_BC,series="Simple back transformation") +
+  autolayer(fc2_eggs_BC,series="Bias adjusted",PI=FALSE) +
+  guides(colour=guide_legend(title="Forecast"))
+```
+**c.** Which model gives the best RMSE?
+
+RMSE--the square root of a variance--can be interpreted as the standard deviation of the unexplained variance.  The Holt damped RMSE is the lowest and best fit model in this case. Lower values indicate better fit.  Based upon the diagrams, the Holt model and the simple back transformation of BoxCox appear to show the most accurate trendlines, but based on being the lowest RMSE values, the damped Holt model has the best fit.
+
+
+
+
+
+
+
+
+

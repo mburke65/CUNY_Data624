@@ -1,31 +1,55 @@
 ---
-title: "Exponential Smoothing - HW4"
+title: 'Data 624: Week 5 Homework'
+author: "Angrand, Burke, Deboch, Groysman, Karr"
+date: "October 12, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
 ---
-##### Chapter 7 HA 7.5, 7.6 and 7.10
 
-7.5 Forecast the next four days of paperback and hardcover books using the data set *books* which contains the same store daily sales data for paperback and hardcover books.
+### Week 5 Assignment 
+
+**Chapter 7 HA 7.5, 7.6 and 7.10**
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp2)
+library(gridExtra)
+
+```
+
+
+##### 7.5 Forecast the next four days of paperback and hardcover books using the data set *books* which contains the same store daily sales data for paperback and hardcover books.
 
 The problem set uses the books timeseries which contains 30 observations of same-store hardback and paperback sales.
-We are asked to . . .
 
-a)  Plot the series and discuss its main features.  
-This shows the 30 day timeseries for both types of books by number sold.
 
-b)  Uses the ses() function to forecast each series and plot the forecasts.
-To do this I first separated the hardbacks and paperbacks into distinct timeseries.  Not doing so will generate an error stating the function requires a univariate timeseries.  Then I ran the Simple Exponential Smoothing (SES) function against both hardbacks and paperbacks for h=4 or 4 days (periods) of forecasting.  This function returns forecasts and other information for exponential smoothing forecasts applied each timeseries.  I then rounded the training errors and plotted the series
-
-c)  Compute the RMSE values for the training data in each case.
-The accuracy function returns a range of summary measures of the forecast accuracy including Root Mean Square Error. for each training data timeseries including RMSE.  For paperbacks books RMSE=33.64 and for hardback books RMSE=31.93.
-
-```{r, load-packages, eval=TRUE, include=FALSE}
-library(fpp2)
+```{r, eval=TRUE}
+#sampling and shape of dataset, preliminary EDA
+head(books)
+dim(books)
 ```
+
+
+  **a.**  Plot the series and discuss its main features.  
+  
+- This shows the 30 day timeseries for both types of books by number sold.
 
 ```{r, load_and_plot_books_ses, eval=TRUE, fig.width=18, fig.height=6}
 data(books)
 autoplot(books) +
-  ylab("back books #sold") + xlab("days")
+  ylab("back books #sold") + xlab("days")+ ggtitle("Daily Book Sales)
 ```
+
+
+
+
+
+
+  **b.**  Uses the ses() function to forecast each series and plot the forecasts.
+  
+- To do this I first separated the hardbacks and paperbacks into distinct timeseries.  Not doing so will generate an error stating the function requires a univariate timeseries.  Then I ran the Simple Exponential Smoothing (SES) function against both hardbacks and paperbacks for h=4 or 4 days (periods) of forecasting.  This function returns forecasts and other information for exponential smoothing forecasts applied each timeseries.  I then rounded the training errors and plotted the series
 
 ```{r, apply_ses_to_books, eval=TRUE, fig.width=18, fig.height=6}
 #create distinct timeseries
@@ -44,6 +68,18 @@ round(accuracy(fc_hb_ses),2)
 #                ME  RMSE   MAE  MPE  MAPE MASE  ACF1
 # Training set 9.17 31.93 26.77 2.64 13.39  0.8 -0.14
 ```
+
+
+
+
+c)  Compute the RMSE values for the training data in each case.
+The accuracy function returns a range of summary measures of the forecast accuracy including Root Mean Square Error. for each training data timeseries including RMSE.  For paperbacks books RMSE=33.64 and for hardback books RMSE=31.93.
+
+
+
+
+
+
 
 ```{r, plot_ses_predictions, eval=TRUE, fig.width=18, fig.height=6}
 autoplot(fc_pb_ses) +
