@@ -1,0 +1,178 @@
+---
+title: 'Data 624: Project 1: Part B'
+author: "Angrand, Burke, Deboch, Groysman, Karr"
+date: "October 22, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+fig_width: 7
+fig_height: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+### Part B - Forecasting Power
+
+**Data: ResidentialCustomerForecastLoad-624.xlsx**
+
+Part B consists of a simple dataset of residential power usage for January 1998 until December 2013.  Your assignment is to model these data and a monthly forecast for 2014. The data is given in a single file.  The variable 'KWH' is power consumption in Kilowatt hours, the rest is straight forward. Add these to your existing files above - clearly labeled.  
+
+```{r warning = F, message = F}
+library(httr)
+library(xlsx)
+library(ggplot2)
+library(gridExtra)
+library(forecast)
+```
+
+
+
+
+  **a.** Read in File 
+  
+```{r message = F, warning = F}
+temp = tempfile(fileext = ".xlsx")
+dataURL <- "https://raw.githubusercontent.com/mburke65/CUNY_Data624/master/ProjectFolder/Provided_Files/ResidentialCustomerForecastLoad-624.xlsx"
+download.file(dataURL, destfile=temp, mode='wb')
+
+power.data <- readxl::read_excel(temp, sheet =1)
+
+
+```
+  
+  **b.** EDA Analysis 
+  
+    - Check/Fill in null values 
+    - Convert to time series
+    - Graph the monthly data 
+      - General plot & seasonal plot: seasonality can be observed in the below plot. There are spikes each year from May to August (air conditioning?) and again in December (holiday season?). There is a slight dip in Jul 2010 maybe due to an unseasonably cold month.
+      - Seasonal Box Plot: provides a similar visual to the seasonal plot with usage spikes in the summer months and December. IT also highlights the flucuations in consumption within each month. 
+      - Decomposition components graph: this plot again shows that there is a general upwards trend in the data with an observed outlier in July 2010.  
+      
+```{r}
+head(power.data)
+summary(power.data)
+print(paste("Check for nulls: ",sum(is.na(power.data)), " Row of Nulls"))
+power.data[is.na(power.data)] <- median(power.data$KWH,na.rm = TRUE)
+power.data.ts <-ts(power.data[,"KWH"],start = c(1998,1),frequency = 12)
+ggtsdisplay(power.data.ts, points = FALSE, plot.type = "histogram") 
+ggseasonplot(power.data.ts)
+boxplot(power.data.ts~cycle(power.data.ts),xlab="Month", ylab = "Power Usage")
+plot(decompose(power.data.ts))
+
+
+```
+  
+  
+  **C.** Model 1: Arima W/ Box-Cox Transformation
+  
+    - Replace outlier with tsoutlier suggestion (utilizes a box-cox transformation)
+    - Use an auto arima model on the box-cox adjusted data
+      - Suggested model: ARIMA(0,0,3)(2,1,0)[12] with drift. RSME(595389) & AICc (5332.67)
+    - Check the residuals to make sure the model is satisfactory: 
+      - ACF /PACF Plots: the residual appears normal residuals mostly around 0, suggesting stationarity of the residuals 
+      - The Box Ljung tests presents a p-value of 0.6951 which indicates white noise
+    - Forecast 2014 power values & plot forecasted values  
+
+
+```{r}
+#outlier detection/suggestion/replacement
+find.outlier<- tsoutliers(power.data.ts, iterate = 2, lambda = "auto")
+power.data.ts.bc<- power.data.ts
+power.data.ts.bc[find.outlier$`index`[1]] <- find.outlier$replacements[1]
+print(paste("Suggested/Implemented Change for Outlier: ",power.data.ts.bc[151], " Original Value",power.data.ts[151]))
+
+#auto arima model
+power.model <- auto.arima(power.data.ts.bc, seasonal = TRUE, stepwise = FALSE)
+summary.arima<- summary(power.model)
+summary.arima
+#check residuals
+checkresiduals(power.model)
+
+#forecast model @ 95%
+forecast.power <- forecast(power.model, level = c(95), h =12)
+forecast.power
+autoplot(forecast.power)
+
+```
+
+
+  **D.** Model 2: ETS W/ Box-Cox Transformation
+  
+    - The ets function automatically selects the best method for forecasting data. the ets function selected ETS(M,N,M) exponential smoothing:
+      - The first letter denotes the error type: multiplicative errors
+      - The second letter denotes the trend type: no trend
+      - The third letter denotes the season type: multiplicative seasonality
+    - Utilize the transformed data & ETS model
+    - Model Results: RMSE (630869.7) & AICc (6148.032)
+    - Check the residuals to make sure the model is satisfactory: 
+      - ACF /PACF Plots: the residual appears normal residuals mostly around 0, suggesting stationarity of the residuals 
+      - The Box Ljung tests presents a p-value of 0.0002921 which may indicate that there's dependency issues with the lags
+      
+```{r}
+#model w/ previously transformed data
+power.model.ets <- ets(power.data.ts.bc)
+summary.ets<- summary(power.model.ets)
+summary.ets
+#check residuals
+checkresiduals(power.model.ets)
+
+#forecast model @ 95%
+forecast.power.ets <- forecast(power.model.ets, level = c(95), h =12)
+forecast.power.ets
+autoplot(forecast.power.ets)
+
+
+```
+    
+
+
+  **E.** Model 3: STLF 
+  
+    - STLF model will be the third model as it provides the user more control and can be robust when dealing with outliers. the STLF utilizes a local weighted regression to fit the points (Loess smoothing) and forecast future values.
+    - Model summary: RMSE (843670.1) & AICc (6255.445)
+    - Check residuals: 
+      - ACF/PACF: most lags are within the error bounds, suggesting stationarity of the residuals 
+      - Box Ljung:p-value = 0.1457 which indicates white noise
+    - Forecast 2014 power values & plot forecasted values
+    
+```{r}
+  power.model.stl <- stlf(power.data.ts,  s.window='periodic', robust=TRUE) 
+summary.stl<- summary(power.model.stl)
+summary.stl
+power.model.stl<- forecast(power.model.stl)
+autoplot(power.model.stl, 12)
+
+checkresiduals(power.model.stl)
+```
+
+
+  **F.** Compare Model Results/Export Data
+  
+    - After comparing the RMSE of in the accuracy test, the ARIMA model will be used as the final model due to the lower RSME and better prediction capabilities. The ARIMA model also has the lowest AICc score and best score from the Box Ljung tests.  
+    
+```{r}
+rmse.list <- data.frame(list(accuracy(power.model)[2], accuracy(power.model.ets)[2], accuracy(power.model.stl)[2]))
+names(rmse.list)<- list('Arima', 'ETS','STL')
+rmse.list
+```
+
+
+  **G.** Send Results to excel  
+  
+    - Send to a .csv file, will manually merge into the project's consolidated file for project submission
+
+
+```{r}
+write.csv(forecast.power,"Power_Forecasts_ARIMA.csv")
+```
+
+    
+    
+    
+    
+  
