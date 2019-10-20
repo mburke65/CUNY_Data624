@@ -1,0 +1,358 @@
+---
+title: "HA_D624_P1"
+author: "Hantz Angrand"
+date: "October 12, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Upload library
+library(tidyverse)
+library(readxl)
+library(fpp2)
+library(forecast)
+
+```
+
+```{r}
+atm<-read_excel("C:/Users/hangr/Documents/fall2019/Data624/ATM624Data.xlsx")
+head(atm,5)
+```
+
+
+```{r}
+#Drop null values
+atm<-atm %>%
+  drop_na()
+```
+
+```{r}
+#Convert each ATM to Column
+atm<- atm %>%
+  spread(ATM,Cash)
+head(atm,5)
+```
+
+```{r}
+#Fix the date column
+atm <- atm %>%
+  mutate(DATE =as.Date(DATE))
+head(atm)
+```
+```{r}
+#Convert to a time series
+ts_atm <- ts(atm %>% select(-DATE))
+
+head(ts_atm)
+```
+
+
+ATM1, ATM2, and ATM4 are a big deal of variation. buT ATM3 shows no cash withdrawn for most of the year.  One assumption we can do about ATM3 is that it has just opened.
+
+we will use the entire time series of ATM1 and ATM2. ATM3 will be used to forecast future prediction.
+
+
+```{r}
+#Separate each ATM from the dataset and graph each dataset
+atm1<-ts_atm[,"ATM1"]
+autoplot(atm1) +
+  labs(title ="Cash Withdrawn from ATM1", x="Day") +
+  scale_y_continuous("Cash withdrawns in hundreds") +
+  scale_color_discrete(NULL) 
+```
+```{r}
+#Separate each ATM from the dataset and graph each dataset
+atm2<-ts_atm[,"ATM2"]
+autoplot(atm2) +
+  labs(title ="Cash Withdrawn from ATM2", x="Day") +
+  scale_y_continuous("Cash withdrawns in hundreds") +
+  scale_color_discrete(NULL)
+```
+
+
+
+
+```{r}
+#Separate each ATM from the dataset and graph each dataset
+atm3<-ts_atm[,"ATM3"]
+autoplot(atm3) +
+  labs(title ="Cash Withdrawn from ATM3", x="Day") +
+  scale_y_continuous("Cash withdrawns in hundreds") +
+  scale_color_discrete(NULL)
+```
+
+```{r}
+#Separate each ATM from the dataset and graph each dataset
+atm4<-ts_atm[,"ATM4"]
+autoplot(atm4) +
+  labs(title ="Cash Withdrawn from ATM4", x="Day") +
+  scale_y_continuous("Cash withdrawns in hundreds") +
+  scale_color_discrete(NULL)
+
+```
+
+ATM1, ATM2 and ATM4 show a lot of deal of seasonality in the withdrawn from those ATM.We can further analyze it by selecting the first 2 months of the data.
+```{r}
+autoplot(ts(ts_atm[1:61, ])) +
+
+  labs(title = "Cash withdrawn from 4 ATMs",
+
+       subtitle = "May 2009 - June 2010",
+
+       x = "Day") +
+
+  scale_y_continuous("Cash withdrawn (hundreds)") +
+
+  scale_color_discrete(NULL)
+```
+
+The data presents a sort of weekly seasonnality. To capture the seasonnality of this data we will set the frequency to 7.
+
+```{r}
+atm1_freq<-ts(atm1, frequency =7)
+atm2_freq<-ts(atm2, frequency=7)
+atm4_freq<-ts(atm4, frequency=7)
+```
+
+##ATM1
+```{r}
+#ACF and spectrum plot
+ggtsdisplay(atm1_freq, points = FALSE, plot.type = "spectrum",
+
+            main = "Withdrawals from ATM1", xlab = "Week", ylab = "Cash (hundreds)")
+```
+
+In 7, 14 and 21 there are large spikes. the frequency 1,2,3 show the spike as well.  Both suggest a seasonnal ARISMA model. 
+
+```{r}
+ggtsdisplay(diff(atm1_freq, 7), points = FALSE,
+
+            main = "Differenced (lag-7) withdrawals from ATM1",
+
+            xlab = "Week", ylab = "Cash (hundreds)")
+```
+BoxCox transformation to estimate lambda
+```{r}
+# get optimal lambda for Box-cox transformation
+
+lambda_atm1<- BoxCox.lambda(atm1_freq)
+
+# define function to create models & return AIC values for timeseries
+
+aic_atm<- function(p, d, q, P, D, Q) {
+
+  # create model with Box-Cox and specified ARIMA parameters; extract AIC
+
+  AIC(Arima(atm1_freq, order = c(p, d, q), seasonal = c(P, D, Q), lambda = lambda_atm1))
+
+}
+
+# create possible combinations of p, q, P, Q except all zero
+
+expand.grid(p = 0:1, q = 0:1, P = 0:1, Q = 0:1) %>%
+
+  filter(p > 0 | q > 0 | P > 0 | Q > 0) %>% 
+
+  # calc AIC for models
+
+  mutate(aic = pmap_dbl(list(p, 0, q, P, 1, Q), aic_atm)) %>% 
+
+  # return best AIC
+
+  slice(which.min(aic))
+  
+```
+The minimum aic value is for non-seasonality AR(1) and MA(1). AR(0) and AM(1) is for seasonality.
+Let's fit the model using arima model arima(1,0,1)(0,1,1)
+```{r}
+fit_atm1 <- Arima(atm1_freq, order = c(1, 0, 1), seasonal = c(0, 1, 1), lambda = lambda_atm1)
+summary(fit_atm1)
+```
+
+Let's diagnostic the residuals with Ljung-Box.
+```{r}
+Box.test(resid(fit_atm1), type = "L", fitdf = 3, lag = 7)
+
+ggtsdisplay(resid(fit_atm1), points = FALSE, plot.type = "histogram",
+
+            main = "Residuals for ARIMA(1,0,1)(0,1,1) fit of ATM1 withdrawals",
+
+            xlab = "Week", ylab = "Residual")
+```
+
+The p_value is greater than 0.05 meaning that the residual is white noise.  The residuals are not correlated and there is a normal distribution around the mean 0.  We can use that model for forecasting.
+```{r}
+forecast_atm1 <- forecast(fit_atm1, 31, level = 95)
+autoplot(forecast_atm1) + 
+
+    labs(title = "ATM1: ARIMA(1,0,1)(0,1,1)", x = "Week", y = NULL) +
+
+    theme(legend.position = "none")
+```
+##ATM2
+ We can repeat the same stepp for ATM2.
+```{r}
+ggtsdisplay(atm2_freq, points = FALSE,
+
+            main = "Withdrawals from ATM2", xlab = "Week", ylab = "Cash (hundreds)")
+```
+ 
+ The lag difference is 7.
+```{r}
+ggtsdisplay(diff(atm2_freq, 7), points = FALSE,
+
+            main = "Differenced (lag-7) withdrawals from ATM2",
+
+            xlab = "Week", ylab = "Cash (hundreds)")
+```
+ The spikes in ACF & PACF in the non-differenced series at $k = 2$ & $k = 5$ suggest $p, q \in [0, 2, 5]$. using the same aic function we can evaluate the minimum aic
+```{r}
+# get optimal lambda for Box-cox transformation
+
+lambda_atm2 <- BoxCox.lambda(atm2_freq)
+
+# Evaluate aic
+
+aic_atm <- function(p, d, q, P, D, Q) {
+
+  # create model with Box-Cox and specified ARIMA parameters; extract AIC
+
+  AIC(Arima(atm2_freq, order = c(p, d, q), seasonal = c(P, D, Q), lambda = lambda_atm2))
+
+}
+
+# create possible combinations of p, q, P, Q except all zero
+
+expand.grid(p = c(0, 2, 5), q = c(0, 2, 5), P = 0:1, Q = 0:1) %>%
+
+  filter(p > 0 | q > 0 | P > 0 | Q > 0) %>% 
+
+  # calculate AIC for models
+
+  mutate(aic = pmap_dbl(list(p, 0, q, P, 1, Q), aic_atm)) %>% 
+
+  # return minimum AIC
+
+  slice(which.min(aic))
+```
+ 
+the model arima used is arima(5,0,5)(0,1,1). Let's fit that model
+```{r}
+fit_atm2<-Arima(atm2_freq, order = c(5, 0, 5), seasonal = c(0, 1, 1), lambda = lambda_atm2)
+summary(fit_atm2)
+```
+
+Let's evaluate the residual to check the validity of the model
+```{r}
+Box.test(resid(fit_atm2), type = "L", fitdf = 11, lag = 14)
+
+ggtsdisplay(resid(fit_atm2), points = FALSE, plot.type = "histogram",
+
+            main = "Residuals for ARIMA(5,0,5)(0,1,1) of ATM2 withdrawals",
+
+            xlab = "Week", ylab = "Residual")
+```
+P-value is greater than 0.05 and the residual appear to be normally distributed with a mean of 0.  It can be used for forecast ATM2.
+```{r}
+forecast_atm2<- forecast(fit_atm2, 31, level = 95)
+autoplot(forecast_atm2) + 
+
+    labs(title = "ATM2: ARIMA(5,0,5)(0,1,1)", x = "Week", y = NULL) +
+
+    theme(legend.position = "none")
+```
+##ATM4
+ATM4 has the same seasonality as ATM1 and ATM2.  We will use the previous step to evaluate ATM4 model.
+```{r}
+#Minimze the effect of the big withdraw in the day by using the median of the ATM4 dataset
+
+atm4_freq[which.max(atm4_freq)] <- median(atm4_freq, na.rm = TRUE)
+
+ggtsdisplay(atm4_freq, points = FALSE,
+
+            main = "Withdrawals from ATM4", xlab = "Week", ylab = "Cash (hundreds)")
+```
+
+We notice a difference lag of 7.
+```{r}
+ggtsdisplay(diff(atm4_freq, 7), points = FALSE,
+
+            main = "Differenced (lag-7) withdrawals from ATM4",
+
+            xlab = "Week", ylab = "Cash (hundreds)")
+```
+ARIMA model for ATM4 will be evaluated.
+```{r}
+# get optimal lambda for Box-cox transformation
+
+lambda_atm4 <- BoxCox.lambda(atm4_freq)
+
+aic_atm(0,2,5,0,2,5)
+
+# create possible combinations of p, q, P, Q except all zero
+
+expand.grid(p = c(0, 2, 5), q = c(0, 2, 5), P = 0:1, Q = 0:1) %>%
+
+  filter(p > 0 | q > 0 | P > 0 | Q > 0) %>% 
+
+  # calculate AIC for models
+
+  mutate(aic = pmap_dbl(list(p, 0, q, P, 1, Q), aic_atm)) %>% 
+
+  # return minimum AIC
+
+  slice(which.min(aic))
+```
+Let's fit the ARIMA model with the values (0,0,2)(0,1,1)
+```{r}
+fit_atm4<-Arima(atm4_freq, order = c(0, 0, 2), seasonal = c(0, 1, 1), lambda = lambda_atm4)
+summary(fit_atm4)
+```
+
+Let's investigate the residuals using Ljung-box test
+```{r}
+Box.test(resid(fit_atm4), type = "L", fitdf = 3, lag = 7)
+
+ggtsdisplay(resid(fit_atm4), points = FALSE, plot.type = "histogram",
+
+            main = "Residuals for ARIMA(0,0,2)(0,1,1) of ATM4 withdrawals",
+
+            xlab = "Week", ylab = "Residual")
+```
+It is normally distributed around a mean of 0.p-value is also greater than 0.05.  We can use the model to forecast.
+```{r}
+forecast_atm4<- forecast(fit_atm4, 31, level = 95)
+autoplot(forecast_atm4) + 
+
+    labs(title = "ATM4: ARIMA(0,0,2)(0,1,1)", x = "Week", y = NULL) +
+
+    theme(legend.position = "none")
+```
+##ATM3
+Since ATM3 contains limited data we will use the mean forecast method.
+```{r}
+forecast_atm3 <- meanf(atm3, 31, level = 95)
+autoplot(forecast_atm3) + 
+
+    labs(title = "ATM3: mean", x = "Day", y = NULL) +
+
+    theme(legend.position = "none")
+```
+
+##Writing the forecast to a CSV file
+```{r}
+data_frame(DATE = rep(max(atm$DATE) + 1:31, 4),
+
+           atm = rep(names(atm)[-1], each = 31),
+
+           Cash = c(forecast_atm1$mean, forecast_atm2$mean,
+
+                    forecast_atm3$mean, forecast_atm4$mean)) %>% 
+
+  write_csv("C:/Users/hangr/Documents/fall2019/Data624/project1_forecast_atm.csv")
+```
+
