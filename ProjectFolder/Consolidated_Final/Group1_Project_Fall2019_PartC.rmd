@@ -1,0 +1,482 @@
+---
+title: "624. Project 1. Fall 2019"
+author: "Team 1. Angrand, Burke, Deboch, Groysman, Karr"
+date: "10/20/2019"
+output:
+  word_document:
+    toc: yes
+    toc_depth: '5'
+  html_document:
+    theme: cerulean
+    toc: yes
+    toc_depth: 5
+---
+
+# Project 1
+
+## Part C – Waterflow_Pipe1.xlsx and Waterflow_Pipe2.xlsx
+
+Part C consists of two data sets.  These are simple 2 columns sets, however they have different time stamps.  Your optional assignment is to time-base sequence the data and aggregate based on hour (example of what this looks like, follows).  Note for multiple recordings within an hour, take the mean.  Then to test appropriate assumptions and forecast a week forward with confidence bands (80 and 95%). Add these to your existing files above – clearly labeled.  
+
+### Step 1. Load Libraries
+
+```{r, warning=FALSE, message=FALSE}
+
+library(forecast)
+
+library(ggplot2)
+
+library(Hmisc)
+
+library(lubridate)
+
+library(fma)
+
+library(readxl)
+
+library(knitr)
+
+library(seasonal)
+
+library(openxlsx)
+
+
+```
+
+### Step 2. Read in 2 Excel files
+
+```{r}
+
+mdata1 <- read_excel("Waterflow_Pipe1.xlsx")
+
+mdata2 <- read_excel("Waterflow_Pipe2.xlsx")
+
+```
+
+### Step 3. Exploratory Analysis.
+
+Let's see domensions, top/bottom records, data types
+
+```{r}
+
+dim(mdata1)
+
+str(mdata1)
+
+kable(summary(mdata1))
+
+head(mdata1)
+
+tail(mdata1)
+
+
+dim(mdata2)
+
+str(mdata2)
+
+summary(mdata2)
+
+head(mdata2)
+
+tail(mdata2)
+
+
+
+```
+
+Some basis scatter plots of our data.
+
+```{r}
+
+
+
+plot(mdata1$DateTime, mdata1$WaterFlow, main="Water Flow - Pipe 1",
+   xlab= "DateTime", ylab="WaterFlow ", pch=19)
+
+plot(mdata2$DateTime, mdata2$WaterFlow, main="Water Flow - Pipe 2",
+   xlab="DateTime", ylab="WaterFlow ", pch=19)
+
+
+```
+
+
+
+### Step 4. Data Cleaning.
+
+Let's get the first dataset in the right format. One record per an hour.
+
+```{r}
+
+
+mdata1$WFp<-Lag(mdata1$WaterFlow,shift=1)
+
+mdata1$DateTimep<-Lag(mdata1$DateTime)
+
+#mydata1$myhour<-hour(mdata1$DateTime)
+
+
+
+mdata1$mhour<-hour(mdata1$DateTime)
+
+mdata1$mhourp<-hour(mdata1$DateTimep)
+
+mdata1$WaterFlowN<-ifelse(mdata1$mhour!=mdata1$mhourp,(mdata1$WaterFlow+mdata1$WFp)/2,NA)
+
+
+mdata1N<-mdata1[complete.cases(mdata1), ]
+
+
+
+mdata1N$DateTimeN<-floor_date(mdata1N$DateTime,"hour")
+
+mdata1N<-mdata1N[,c(8,7)]
+
+```
+
+
+Let's see domensions, top and bottom records, and a plot of transformed data.
+
+```{r}
+
+dim(mdata1N)
+
+head(mdata1N)
+
+tail(mdata1N)
+
+plot(mdata1N$DateTimeN, mdata1N$WaterFlowN, main="Water Flow - Pipe 1",
+   xlab= "DateTime", ylab="WaterFlow ", pch=19)
+
+```
+
+Fixing missing data (4 records were missing), taking into account time zone and daylight saving time.
+
+```{r}
+
+#4 hour difference
+
+nr1<-data.frame(as.POSIXct("2015-10-27 17:00:00 -0400"),28.944308)
+names(nr1)<-c("DateTimeN","WaterFlowN")
+nr1
+mdata1N <- rbind(mdata1N, nr1)
+
+#4 hour difference
+nr2<-data.frame(as.POSIXct("2015-11-01 01:00:00 -0400"),19.998079)
+names(nr2)<-c("DateTimeN","WaterFlowN")
+
+#4 hour difference
+nr2<-data.frame(as.POSIXct("2015-10-28 00:00:00 -0400"),17.089225)
+names(nr2)<-c("DateTimeN","WaterFlowN")
+
+mdata1N <- rbind(mdata1N, nr2)
+#5 hour difference - time change
+nr3<-data.frame(as.POSIXct("2015-11-01 08:00:00 -0500"),23.474922)
+names(nr3)<-c("DateTimeN","WaterFlowN")
+
+
+mdata1N <- rbind(mdata1N, nr3)
+
+
+mdata1N1 <- mdata1N[order(mdata1N$DateTimeN),]
+
+```
+
+
+### Step 5. Converting data into time series.
+
+Our first dataset only covers time period from 10/23/2019, 1AM to 11/1/2019 11PM, while the second dataset covers from 10/23/2019, 1AM to 12/3/2019, 4PM. We are required to forecast one week of data flow for both pipes. So, the correct way would be to predict one week from the earliest data set, or from 11/1/2019, 11PM. For that time period, we only need to forecast first dataset and for the second we have actual data.
+
+```{r}
+
+ts1<-ts(mdata1N1$WaterFlowN,start=c(2015,10,23,1),freq=24)
+
+```
+
+
+
+```{r}
+
+autoplot(ts1) +
+  ggtitle("Water Flow - Pipe 1") +
+  xlab("Hour") +
+  ylab("Water Flow")
+
+```
+
+
+```{r}
+
+#ts2<-ts(mdata2$WaterFlow,start=c(2015,10,23,1),freq=24*365)
+
+#ts2
+
+#autoplot(ts2) +
+#  ggtitle("Water Flow - Pipe 2") +
+#  xlab("Hour") +
+#  ylab("Water Flow")
+
+#mdataM=merge(x = mdata1N1, y = mdata2, by.x = "DateTimeN", by.y="DateTime")
+
+#dim(mdataM)
+
+#dim(mdataM)
+
+#mdataM$WaterFlowC<-mdataM$WaterFlowN+mdataM$WaterFlow
+
+#mdataM<-mdataM[,c(1,4)]
+
+#mdataM
+
+#strftime(mdataM$DateTimeN,"%Y-%m-%d %H:%M:%S %z")
+
+#ts3<-ts(mdataM$WaterFlowC,start=c(2015,10,23,2),freq=24)
+
+#autoplot(ts3) +
+#  ggtitle("Water Flow - Pipe 1 and 2") +
+#  xlab("Hour") +
+#  ylab("Water Flow")
+
+```
+
+
+### Step 6. Looking at seasonality and trend.
+
+
+Maximum value
+
+```{r}
+
+
+which.max(ts1)/24
+
+```
+
+
+The spike in water flow was on 3 day, we can see on the graph.
+
+
+```{r}
+
+
+ggseasonplot(ts1)
+
+```
+
+
+
+No clear patern in water use by time of day. Even though, more water seems to be used in late hours.
+
+```{r}
+
+ggsubseriesplot(ts1)
+
+```
+
+
+No clear picture. But the top hours were evening and night. The lowest water use was in mornings.
+
+```{r, fig.height = 10, fig.width = 10}
+
+
+gglagplot(ts1)
+
+```
+
+```{r}
+
+ggAcf(ts1, lag=24)
+
+```
+
+
+Again no clear pattern
+
+### Step 8. Applying decomposition.
+
+```{r}
+
+ts_decomp<-decompose(ts1,type="multiplicative")
+
+
+```
+
+
+```{r, results='hide',warning=FALSE}
+
+autoplot(ts_decomp) +
+  ggtitle("Hourly water flow - 10 days time period - Multiplicative Decomposition") +
+  xlab("Hourly") 
+```
+
+
+There is some type of sesonality - pattern repeats daily. But no clear trend.
+
+Seasonaly adjusted data
+
+```{r}
+
+adjust_ts<-ts1/ts_decomp$seasonal
+
+autoplot(adjust_ts) +
+  ggtitle("Hourly water flow - 10 days - Seasonally Adjusted") +
+  xlab("Hourly") 
+
+
+```
+
+
+```{r}
+
+fit <- stl(ts1, t.window=13, s.window="periodic",
+  robust=TRUE)
+
+fit1<-fit %>% seasadj() %>% naive()
+ 
+fit1%>%autoplot() + ylab("New orders index") +
+  ggtitle("Naive forecasts of seasonally adjusted data")
+
+
+```
+
+
+
+
+
+```{r}
+
+fit2<-fit %>% forecast(method="naive") 
+
+fit2%>%autoplot() + ylab("New orders index")
+
+```
+
+
+
+```{r}
+
+fcast <- stlf(ts1, method='naive')
+
+```
+
+
+### Step 9. Exponential Forecasting.
+
+Simple exponential forecast.
+
+```{r}
+
+fc <- ses(ts1, h=24*7)
+# Accuracy of one-step-ahead training errors
+round(accuracy(fc),2)
+
+```
+
+```{r}
+
+autoplot(fc) +
+  autolayer(fitted(fc), series="Fitted") +
+  ylab("Water Flow - Pipes 1") + xlab("Hours")
+
+```
+
+
+```{r}
+
+fc <- holt(ts1, h=24*7)
+
+fc2 <- holt(ts1, damped=TRUE, phi = 0.9, h=24*7)
+autoplot(ts1) +
+  autolayer(fc, series="Holt's method", PI=FALSE) +
+  autolayer(fc2, series="Damped Holt's method", PI=FALSE) +
+  ggtitle("Forecasts from Holt's method") + xlab("Hours") +
+  ylab("Water Flow)") +
+  guides(colour=guide_legend(title="Forecast"))
+
+```
+
+```{r}
+
+e1 <- tsCV(ts1, ses, h=1)
+e2 <- tsCV(ts1, holt, h=1)
+e3 <- tsCV(ts1, holt, damped=TRUE, h=1)
+mean(e1^2, na.rm=TRUE)
+
+mean(e2^2, na.rm=TRUE)
+
+mean(e3^2, na.rm=TRUE)
+
+mean(abs(e1), na.rm=TRUE)
+
+mean(abs(e2), na.rm=TRUE)
+
+mean(abs(e3), na.rm=TRUE)
+
+
+```
+
+The simple exponential forecast appears to be the best.
+
+```{r}
+
+fit1 <- hw(ts1,seasonal="additive")
+fit2 <- hw(ts1,seasonal="multiplicative")
+autoplot(ts1) +
+  autolayer(fit1, series="HW additive forecasts", PI=FALSE) +
+  autolayer(fit2, series="HW multiplicative forecasts",
+    PI=FALSE) +
+  xlab("Hours") +
+  ggtitle("Water flow - Pipe 1") +
+  guides(colour=guide_legend(title="Forecast"))
+
+```
+
+
+### Step 9. Selecting Forecasting Method.
+
+```{r}
+
+fit<-ets(ts1)
+
+summary(fit)
+
+```
+
+Model selected is A and N and N
+
+```{r}
+
+autoplot(fit)
+
+```
+
+```{r}
+
+cbind('Residuals' = residuals(fit),
+      'Forecast errors' = residuals(fit,type='response')) %>%
+  autoplot(facet=TRUE) + xlab("Hours") + ylab("")
+
+```
+
+```{r}
+
+fit1 <- fit%>%forecast(h=24*7,level=c(80,95)) 
+
+fit1%>%
+  autoplot() +
+  ylab("Water flow - pipe 1 - 7 days forecast")
+
+```
+
+### Step 10. Preparing the final file to be ouputed in the Excel
+
+```{r}
+
+mdata1A<-mdata2[240:(239+24*7),]
+
+fdata<-cbind(fit1,mdata1A)
+
+#write.xlsx(fdata, "fdata.xlsx")
+
+```
+
+
