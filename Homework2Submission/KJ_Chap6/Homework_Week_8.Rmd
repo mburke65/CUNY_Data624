@@ -1,0 +1,141 @@
+---
+title: "Data 624: Week 8 Homework"
+author: "Angrand, Burke, Deboch, Groysman, Karr"
+date: "November 29, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+fig_width: 7
+fig_height: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Week 8 Assignment 
+
+```{r warning = F, message = F}
+library(AppliedPredictiveModeling)
+library(caret)
+library(dplyr)
+library(RANN)
+library(knitr)  
+```
+
+**Chapter 6 KJ 6.3**
+
+6.3. A chemical manufacturing process for a pharmaceutical product was discussed in Sect. 1.4. In this problem, the objective is to understand the relationship between biological measurements of the raw materials (predictors), measurements of the manufacturing process (predictors), and the response of product yield. Biological predictors cannot be changed but can be used to assess the quality of the raw material before processing. On the other hand, manufacturing process predictors can be changed in the manufacturing process. Improving product yield by 1% will boost revenue by approximately one hundred thousand dollars per batch:
+
+**a.** Start R and use these commands to load the data.
+
+
+
+```{r}
+data(ChemicalManufacturingProcess)
+```
+
+
+*The matrix processPredictors contains the 57 predictors (12 describing the input biological material and 45 describing the process predictors) for the 176 manufacturing runs. yield contains the percent yield for each run.*
+
+**b.** A small percentage of cells in the predictor set contain missing values. Use an imputation function to fill in these missing values (e.g., see Sect. 3.8).
+
+  - Find missing values with sapply. THe total dataframe only contains 175=6 rows and there are quite a few columns that are missing over 5% of their values. The values need to be imputted not removed.
+  
+  - The mentioned section 3.8 highlights the impute.knn function from the impute library and the preprocess function from the caret library. The impute.knn function uses K-nearest neighbors to estimate the missing data and can be called as a subcomponent in the preprocess function. 
+  
+  - After calling the prerpocess function, the predict method applies the results to the set of data 
+  
+  - Check to see if all nulls have been removed with sapply
+
+```{r}
+#dim
+dim(ChemicalManufacturingProcess)
+#check for NaNs
+sapply(ChemicalManufacturingProcess, function(x) sum(is.na(x)))
+#impute with preProcess, apply with predict
+impute <- preProcess(as.matrix(ChemicalManufacturingProcess), method=c("knnImpute"))
+impute.chem <-  as.data.frame(predict(impute, as.matrix(ChemicalManufacturingProcess)))
+#check again for nulls after applying 
+sapply(impute.chem, function(x) sum(is.na(x)))
+```
+
+**c.** Split the data into a training and a test set, pre-process the data, and tune a model of your choice from this chapter. What is the optimal value of the performance metric?
+
+- Yield c(1) is the response of the other columns (predictors)
+- Prepare the data: split the data into train/test samples. Train (75% for building a predictive model) and Test (15% for evaluating the model)
+- Use partial least squares method with a tested 20 different values for the tuning parameter ncomp
+- As seen below, the most optimal value is ncomp = 3 with the smallest RSME of 0.6554035 and a R^2 of 0.6096468
+
+```{r}
+## set the seed to make the partition reproducible
+set.seed(123)
+train.chem <- createDataPartition(ChemicalManufacturingProcess$Yield, p=0.75, list=FALSE)
+
+#apply to the predictors 
+chem.Train <- impute.chem[train.chem,-1]
+chem.Test <- impute.chem[-train.chem,-1]
+#apply to yield
+yield.Train <- impute.chem[train.chem,1]
+yield.Test <- impute.chem[-train.chem,1]
+
+#partial least squares w/ train data 
+
+pls.chem <- train(chem.Train, yield.Train,
+                 method = "pls",
+                 tuneLength = 20, trControl = trainControl(method = "cv", number = 10),
+                 preProc = c("center", "scale"))
+#print outcomes of the pls
+pls.chem
+
+# Plot model RMSE vs different values of components
+plot(pls.chem)
+
+# Print the best tuning parameter ncomp that
+# minimize the cross-validation error, RMSE
+pls.chem$bestTune
+# Summarize the final model
+summary(pls.chem$finalModel)
+
+```
+
+**d.** Predict the response for the test set. What is the value of the performance metric and how does this compare with the resampled performance metric on the training set?
+
+- Make predictions with the predict() function with the inputted chem.test data 
+- Compare the predicted values to the actual valyes "yield.Test"
+- The RMSE is very close to the train data RSME. The Rsquare value is lower than the train values.
+```{r}
+# Make predictions
+
+predictions <- predict(pls.chem, newdata = chem.Test)
+
+data.frame(
+  RMSE = caret::RMSE(predictions, yield.Test),
+  Rsquare = caret::R2(predictions, yield.Test)
+)
+```
+
+
+**e.** Which predictors are most important in the model you have trained? Do either the biological or process predictors dominate the list?
+
+- Find the absolute value from the mean contributions for each coefficient
+- ManufacturingProcess32, ManufacturingProcess13,ManufacturingProcess17 & ManufacturingProcess09 appear to be the most significant by a good margin.
+- In general, the manufacturing process variables appear to be more significant than any other grouping of variables 
+```{r}
+
+predictors.pls <- as.data.frame(pls.chem$finalModel$coefficients)
+predictors.pls<- tibble::rownames_to_column(predictors.pls, "coefficients")
+predictors.pls%>% 
+  mutate(meancol= rowMeans(.[, 2:4]))%>%
+  mutate(absmeancol =abs(meancol))%>%
+  arrange(-absmeancol)
+  
+```
+
+**f.** Explore the relationships between each of the top predictors and the response. How could this information be helpful in improving yield in future runs of the manufacturing process?
+
+- For the manufacturing processes with negative coefficients, the facility could alter their processes to decrease the associated impact to yields
+- For the manufacturing processes with positibe coefficients, the facility to could their processes to increase the associasted impact to yields 
+- Given that Biological materials do not have a significant impact, the facility could alter the ingrediants/materials to increase the associated yields 
+
