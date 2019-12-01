@@ -1,0 +1,392 @@
+---
+title: "Data624_HW7"
+author: "Hantz Angrand"
+date: "November 25, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#KJ 7.2
+#Creating Training and Testing data
+```{r}
+library(mlbench)
+set.seed(200)
+#Training data set
+f_train<-mlbench.friedman1(200, sd=1)
+f_train$x <- data.frame(f_train$x)
+
+#Test Data set
+f_test <- mlbench.friedman1(5000, sd = 1)
+f_test$x <- data.frame(f_test$x)
+```
+#The relationship between the predictors `x1`-`x10` and the response y
+
+```{r}
+head(f_train$x)
+```
+
+
+```{r}
+head(f_test$x)
+```
+#Determine correlation between x and y
+
+```{r}
+library(tidyverse)
+f_train$x %>%
+  #gather x and y
+  mutate(y=f_train$y) %>%
+  # tidy data frame for easier manipulating & plotting
+  gather(var, x,-y) %>%
+  #factor x variable and change factors so X10 is last
+  mutate(var= forcats::fct_relevel(factor(var), "X10", after=Inf)) %>%
+  ggplot(aes(x,y)) +
+  geom_point(alpha=0.25) +
+  stat_smooth(method="glm", se = FALSE) +
+  facet_wrap(~ var, nrow = 2)
+```
+The variable `X1`, `X2`, `X4`, `X5` show positive correlation with the response `y`.
+The other variable show no corrlation.
+
+##Training Model
+
+###K-Nearest Neighboor Model (KNN)
+```{r}
+library(caret)
+#Set The seed
+set.seed(100)
+f_knn<- train(f_train$x, f_train$y, method = "knn",
+              preProc=c("center","scale"), tunelength=10)
+```
+
+RMSE with varying tuning parameters
+```{r}
+f_knn$results %>%
+  ggplot(aes(x=k, y=RMSE)) +
+  geom_line() + geom_point(size=1) +
+  labs(title="KNN VS RMSE")
+```
+$k=9$ is the optimal model with an RMSE of `r round(min(f_knn$results),3)`
+
+###MARS Model
+```{r}
+set.seed(100)
+f_mars<-train(f_train$x, f_train$y, method ="earth",
+              preProc=c("center", "scale"),
+              tuneGrid = expand.grid(degree=1:2, nprune=1:20))
+```
+ The profile of the model as shown below
+```{r}
+f_mars$results %>%
+  ggplot(aes(x=nprune, y=RMSE, col=factor(degree))) +
+  geom_line() + geom_point(size=1)+
+  labs(title="MARS VS RMSE", col="degree")+
+  theme(legend.position="top")
+```
+ 
+The optimal RMSE of `r round(min(f_mars$results$RMSE),3)` is achieved with a second-degree.  The importane of the predictor `r pander::pander(varImp(f_mars[["importance"]]))`.  As you can see `X1`-`X5`are the only predictors.
+
+
+###SVM Model
+```{r}
+set.seed(100)
+f_svm<-train(f_train$x, f_train$y, method="svmRadial",
+             preProc=c("center","scale"), tuneLength = 10)
+```
+The profile of the model
+```{r}
+f_svm$results %>%
+  ggplot(aes(x=C, y= RMSE))+
+  geom_line() + geom_point(size=1)+
+  scale_x_continuous(trans="log2")+
+  labs(title="SVM VS RMSE")
+```
+
+$C = 4$ is the cost parameter.  The optimal RMSE is `r round(min(f_svm$results$RMSE), 3)`.
+
+###Performance and Selection
+Use the model to predict
+```{r}
+f_knn_pred<-predict(f_knn, f_test$x)
+f_mars_pred<-predict(f_mars, f_test$x)
+f_svm_pred<-predict(f_svm,f_test$x)
+```
+
+Performance of each model
+```{r}
+library(pander)
+f_knn_perf<-defaultSummary(data.frame(obs=f_test$y, pred=f_knn_pred))
+f_mars_perf<-defaultSummary(data.frame(obs=f_test$y, pred=f_mars_pred[,1]))
+f_svm_perf<-defaultSummary(data.frame(obs=f_test$y,pred=f_svm_pred))
+
+pander(data.frame(RMSE=c(f_knn_perf["RMSE"], f_mars_perf["RMSE"], f_svm_perf["RMSE"]),
+                  row.names=c("knn", "MARS","SVM")))
+```
+RMSE for MARS model is the lowest so it corresponds to the bes model.
+
+
+#KJ 7.5
+```{r}
+library(AppliedPredictiveModeling)
+data("ChemicalManufacturingProcess")
+
+ched_pred<-ChemicalManufacturingProcess %>% select(-Yield)
+ched_yield<-ChemicalManufacturingProcess %>% select(Yield)
+
+
+```
+
+
+###Transformation and preprocessing
+```{r}
+chem_preproc<-preProcess(ched_pred, method=c("knnImpute","center", "scale",
+                                             "nzv","corr"))
+
+chem_trans<-predict(chem_preproc,ched_pred)
+
+set.seed(42)
+train_r<-createDataPartition(ched_yield$Yield, p=0.75,list= FALSE)
+
+ched_pred_trn<-chem_trans[train_r,]
+ched_yield_trn<-ched_yield[train_r,]
+
+ched_pre_test<-chem_trans[-train_r,]
+ched_yield_test<-ched_yield[-train_r,]
+
+```
+
+###Model Training and Performance
+```{r}
+#Cross-validation using 15 fold
+set.seed(100)
+chem_ctrl<-trainControl(method="cv", number = 15)
+```
+
+###Neural Network model
+```{r}
+set.seed(100)
+chem_nn<-train(ched_pred_trn, ched_yield_trn,
+               method = "nnet", trControl=chem_ctrl,
+               lineout=TRUE, trace=FALSE, maxit=500,
+                tuneGrid = expand.grid(decay=c(0,0.01,1), size=1:10)
+              )
+```
+###RMSE
+```{r}
+chem_nn$results %>%
+  ggplot(aes(x=size, y=RMSE,col=factor(decay))) +
+  geom_line() + geom_point(size=1)+
+  labs(title="Neural Network") +
+  theme(legend.position = "top")
+```
+The optimal RMSE is `r round(min(chem_nn$results$RMSE),3)`.
+
+```{r}
+chem_nn_pred<-predict(chem_nn,ched_pre_test)
+chem_nn_perf<-defaultSummary(data.frame(obs=ched_yield_test, pred=chem_nn_pred[,1]))
+```
+
+RMSE prediction against the test is `r round(chem_nn_perf["RMSE"],3)`
+
+###Mars Model
+```{r}
+set.seed(100)
+chem_mars<-train(ched_pred_trn,ched_yield_trn,
+                 method="earth", trControl=chem_ctrl,
+                 tuneGrid=expand.grid(degree=1:3, nprune=2:45))
+```
+
+
+```{r}
+chem_mars$results %>% 
+  ggplot(aes(x=nprune, y=RMSE, col=factor(degree))) +
+  geom_line() + geom_point(size=1) +
+  labs(title="Mars Model", col="degree")+
+  theme(legend.position="top")
+```
+
+The RMSE is `r round(min(chem_mars$results$RMSE),3).
+```{r}
+chem_mars_pred<-predict(chem_mars,ched_pre_test)
+chem_mars_perf<-defaultSummary(data.frame(obs=ched_yield_test, pred= chem_mars_pred[,1]))
+```
+
+Test Performance is `r round(chem_mars_perf["RMSE"],3)`
+
+###SVM
+```{r}
+set.seed(100)
+#radial kernel
+chem_svm_r<-train(ched_pred_trn, ched_yield_trn,
+                  method="svmRadial", trControl=chem_ctrl)
+
+#Poly Kernel
+chem_svm_p<-train(ched_pred_trn, ched_yield_trn,
+                  method="svmPoly", trControl=chem_ctrl)
+
+#linear kernel
+chem_svm_l<-train(ched_pred_trn, ched_yield_trn,
+                  method="svmLinear", trControl=chem_ctrl,
+                  tuneGrid = data.frame(C=c(0.25, 0.5,1)))
+```
+
+#Plot the SVM Model
+```{r}
+gridExtra::grid.arrange(top = "SVM model\n", 
+
+  chem_svm_r$results %>% 
+
+    ggplot(aes(x = C, y = RMSE)) + geom_line() + geom_point(size = 1) +
+
+    labs(subtitle = "Radial kernel"),
+
+  chem_svm_l$results %>% 
+
+    ggplot(aes(x = C, y = RMSE)) + geom_line() + geom_point(size = 1) +
+
+    labs(subtitle = "Linear kernel"),
+
+  chem_svm_p$results %>% 
+
+    ggplot(aes(x = C, y = RMSE, col = factor(degree), lty = factor(scale))) +
+
+    geom_line() + geom_point(size = 1) +
+
+    labs(subtitle = "Polynomial kernel", col = "degree", lty = "scale") +
+
+    ylim(1, 7.5) + theme(legend.position = "top", legend.box = "vertical",
+
+                         legend.margin = margin(0, 0, 0, 0),
+
+                         legend.box.margin = margin(0, 0, 0, 0)),
+
+  nrow = 1
+
+)
+                        
+```
+
+
+$C=1$ represents the minima for linears and radial kernel.
+```{r}
+data.frame(C = c(chem_svm_r$results %>% slice(which.min(RMSE)) %>% pull(C),
+
+                 chem_svm_l$results %>% slice(which.min(RMSE)) %>% pull(C),
+
+                 chem_svm_p$results %>% slice(which.min(RMSE)) %>% pull(C)),
+
+           degree = c(NA, NA, chem_svm_p$results %>% slice(which.min(RMSE)) %>% pull(degree)),
+
+           scale = c(NA, NA, chem_svm_p$results %>% slice(which.min(RMSE)) %>% pull(scale)),
+
+           RMSE = c(min(chem_svm_r$results$RMSE),
+
+                    min(chem_svm_l$results$RMSE),
+
+                    min(chem_svm_p$results$RMSE)),
+
+           row.names = c("Radial", "Linear", "Polynomial")) %>% 
+
+  pander()
+```
+
+SVM performance
+```{r}
+#Radial kernel
+chem_svm_r_pred<-predict(chem_svm_r, ched_pre_test)
+chem_svm_r_perf<-defaultSummary(data.frame(obs=ched_yield_test, pred=chem_svm_r_pred))
+
+#linear Kernel
+chem_svm_l_pred<-predict(chem_svm_l, ched_pre_test)
+chem_svm_l_perf<-defaultSummary(data.frame(obs=ched_yield_test, pred=chem_svm_l_pred))
+
+#polynomial kernel
+chem_svm_p_pred<-predict(chem_svm_p,ched_pre_test)
+chem_svm_p_perf<-defaultSummary(data.frame(obs=ched_yield_test, pred=chem_svm_p_pred))
+
+pander(data.frame(RMSE=c(chem_svm_r_perf["RMSE"], chem_svm_l_perf["RMSE"], chem_svm_p_perf["RMSE"]), row.names=c("Radial", "Linear", "Polynomial")))
+```
+The linear model shows a better performance than the polynomial model.
+
+###KNN model
+```{r}
+set.seed(100)
+chem_knn<-train(ched_pred_trn, ched_yield_trn,
+                method="knn", trControl= chem_ctrl,
+                tuneGrid=data.frame(k=1:20))
+```
+
+
+Relationship between $k$ and RMSE 
+```{r}
+chem_knn$results %>%
+  ggplot(aes(x=k, y=RMSE))+
+  geom_line() + geom_point(size=1)+
+  labs(title="knn model")
+```
+The minimum RMSE occurs at $k = 3$. RMSE is `r round(min(chem_knn$results$RMSE),3).
+
+```{r}
+chem_knn_pred<-predict(chem_knn,ched_pre_test)
+chem_knn_perf<-defaultSummary(data.frame(obs=ched_yield_test, pred=chem_knn_pred))
+
+```
+
+Test performance `r round(min(chem_knn_perf["RMSE"],3))`.
+```{r}
+rmse<- function (model_set) {
+
+  mdl_names <- character()
+
+  resampled <- numeric()
+
+  test <- numeric()
+
+  for (mdl in model_set) {
+
+    mdl_names <- c(mdl_names, mdl)
+
+    resampled <- c(resampled, min(get(paste0("chem_", mdl))$results$RMSE))
+
+    test <- c(test, get(paste0("chem_", mdl, "_perf"))["RMSE"])
+
+  }
+
+  pander(data.frame(`Resampled RMSE` = resampled, `Test RMSE` = test,
+
+                    row.names = mdl_names, check.names = FALSE), digits = 4)
+
+}
+
+rmse(c("nn","mars", "svm_r", "svm_l","svm_p","knn"))
+```
+
+MARS is the best resample model.  Knn model is the best test RMSE.
+##Predictor Importance
+```{r}
+mars_imp<-varImp(chem_mars)
+ggplot(mars_imp, top=10) +ggtitle("Importance of the predictors MARS Model")
+```
+
+Compare with the linear PLS model fit in problem 6.3:
+```{r}
+set.seed(100)
+chem_pls<-train(x=ched_pred_trn, y=ched_yield_trn,
+                method="pls", tuneLength = 20, trControl = chem_ctrl)
+#Importance on the linear model
+pls_imp<-varImp(chem_pls)
+#plot the importance
+gridExtra::grid.arrange(top="Importance of the 2 models",
+                        ggplot(mars_imp, top=10)+
+                          labs(subtitle="SMV non-linear", x=NULL, y=NULL),
+                        ggplot(pls_imp, top=10) +
+                          labs(subtitle="PLS Linear", x=NULL, y=NULL),
+                        nrow=1)
+
+```
+manufacturing32 is the most important predictor.
+
+
+
