@@ -1,0 +1,466 @@
+---
+title: "Project2_Group1_Data624"
+author: "Angrand, Burke, Deboch, Groysman, Karr"
+date: "December 1, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Data 624 Project 2 
+
+### Prompt
+
+You are given a simple data set from a beverage manufacturing company.  It consists of 2,571 rows/cases of data and 33 columns / variables. **Your goal is to use this data to predict PH (a column in the set).**  PH is a measure of acidity/alkalinity, it must conform in a critical range and therefore it is important to understand its influence and predict its values.This is production data.  PH is a KPI, Key Performance Indicator.  You are also given a scoring set (267 cases).  All variables other than the dependent or target.  You will use this data to score your model with your best predictions. 
+
+**Provided Files**
+
+- Data Dictionary.xlsx *Provides a listing of the columns and their underlying data components*
+- StudentData.xlsx *The training dataset for the exercise*
+- StudentEvaluation- TO PREDICT.xlsx *The evaluation dataset for the exercise*
+
+
+**Required Packages**
+
+```{r warning = F, message = F}
+#Upload library
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(ggcorrplot)
+library(reshape2)
+library(caret)
+library(mice)
+library(fastDummies)
+```
+
+#### 1. Read in Data 
+
+-  Download from the group's github repository link to ensure stakeholders can reproduce easily.
+-  The file is downloaded from git to the user's default downloads location and read in with the read_excel function from the readxl module
+- Print the dimensions to ensure that the data is consistent with promt specifications 
+  - Train Data: 2,571 observations, 33 predictors 
+  - Eval Data: 267 observations, 33 predictors \
+  
+**a) Training Dataset - Student Data**
+
+```{r message = F, warning = F}
+train.loc <- tempfile(fileext = ".xlsx")
+train.dataURL <- "https://raw.githubusercontent.com/mburke65/CUNY_Data624/master/Project2Folder/ProvidedFiles/StudentData.xlsx"
+download.file(train.dataURL, destfile= train.loc, mode='wb')
+
+
+train.data <- readxl::read_excel(train.loc,sheet =  1,  col_names =TRUE)
+print(paste("Dimensions of the train.data:", list(dim(train.data))))
+```
+
+**b) Evaluation Dataset - StudentEvaluation- TO PREDICT.xlsx**
+
+```{r message = F, warning = F}
+eval.loc <- tempfile(fileext = ".xlsx")
+eval.dataURL <- "https://raw.githubusercontent.com/mburke65/CUNY_Data624/master/Project2Folder/ProvidedFiles/StudentEvaluation-%20TO%20PREDICT.xlsx"
+download.file(eval.dataURL, destfile= eval.loc, mode='wb')
+
+eval.data <- read_excel(eval.loc,sheet =  1,  col_names =TRUE)
+print(paste("Dimensions of the eval.data:", list(dim(eval.data))))
+```
+
+
+#### 2. Exploratory Data Analysis 
+
+- a. Identify the predictors (column names)
+- b. For numerical predictors (!= "Brand Code"), explore predictors summary statistics. The summary statistics provide a quick and simple description of the data which helps us have a better understanding of the data. The summary function in R provides the mean, median, number of nulls, min and max.
+- c. For categorical predictors (== "Brand Code"), explore the frequency of brands 
+- d. Graphically highlight nulls 
+- e. Investigate the correlation between predictors 
+- f. histogram of all the predictors to better understand the shape and spread of the data 
+
+
+**a. Identify Predictors**
+```{r}
+#predictors 
+names(train.data)
+```
+
+**b) Summary Statistics Table**
+
+- Initial Findings: MFR and Brand Code have a significant percentage of null values and the scaling/range of each variable varies
+
+```{r}
+#get the null values
+
+null.values <-as.data.frame(sapply(train.data, function(x) sum(is.na(x))), col.names = "null_values")%>%
+  tibble::rownames_to_column("Predictors")%>%
+  rename(nulls = 2)%>%
+  mutate(Percentage_Missing = round((nulls/2571)*100,2))
+
+#get the summary stats, restructure into a readable dataframe. merge on the null.values
+summary.stats <- as.data.frame(summary(train.data))%>%
+  separate(Freq, c("Summary.Stat","Value"), sep = ":")%>%
+  na.omit() %>%
+  mutate(Var2 = as.character(Var2))%>%
+  mutate_if(is.character, str_trim)%>%
+  filter(Value !="character  " )%>%
+  mutate(Value.Num = factor(Value))%>%
+  select(-c(Var1, Value))%>%
+  rename(Predictors = Var2)%>%
+  spread(Summary.Stat, Value.Num)%>%
+  left_join(null.values, by = "Predictors")%>%
+  arrange(-nulls)%>%
+  select(-c("1st Qu.","3rd Qu.","Class", "Length" , "NA's" ,'Mode' ))
+
+summary.stats
+```
+
+**c) Categorical Frequency - Brand Code**
+
+- Brand Code B is the most popular brand produced by the factory by a significant margin
+- Approximately 5% of the  Brands dropped identification (null), future null analysis in (d)
+
+```{r}
+brand <- train.data%>%
+  rename(Brand_Code = 1)%>%
+  group_by(Brand_Code)%>% summarise(n = n())%>%
+  arrange(-n)%>%
+  mutate(Presence_Precentage = round((n/sum(n))*100,1))
+brand
+```
+```{r}
+brand%>%
+   
+  ggplot(aes(x= reorder(Brand_Code,-Presence_Precentage), y = Presence_Precentage))+
+  geom_bar(stat = "identity", fill = "purple", color = "black")+ 
+  ggtitle("Brand Presence")+
+  xlab("Brand")+
+  ylab("Percentage(%)")
+```
+
+
+**d) Null Display - All Predictors**
+
+- This graph displays the missing values across diverse predictors. In subsequent sections, the group will determine an approach to deal with missing values (i.e. random generation of values, mean replacement or k-neighbor, etc.)
+
+```{r}
+summary.stats%>%
+   
+  ggplot(aes(x= reorder(Predictors,-Percentage_Missing), y = Percentage_Missing ))+
+  geom_bar(stat = "identity",fill = "red", color = "black")+ 
+  theme(axis.text.x=element_text(angle=90, hjust=1))+ 
+  ggtitle("Percentage of Missing Values Per Predictor")+
+  xlab("Predictor")+
+  ylab("Percentage(%)")
+ 
+
+```
+
+**e) Data Correlations Display - All Predictors**
+
+- Compute the correlation matrix using the cor() function. Override the "use" parameter, a optional parameter method for computing covariances in the presence of missing values which the PH dataset has.
+- Display the correlation matrix ggcorrplot()
+- Extract the unique predictor combinations with the highest correlation values (>= .85)
+  -  Balling Lvl is highly correlated to Balling, Density, Alch Rel, Carb Rel
+  -  Carb Rel is highly correlated to Alch Rel, Balling, Density
+  -  Bowl Setpoint is highly correlated to Filler Level
+  -  Balling is highly correlated to Density
+  -  MFR is highly correlated to Filler Speed
+  -  Hyd Pressure3 is highly correlated to Hyd Pressure2
+- In subsequent steps, the group will likely remove the highly correlated variables to avoid multicollinearity in our modeling
+  - use the findCorrelation() with the .85 threshold to identify which predictors should be removed from the subset previously identified. The function finds absolute values of pair-wise correlations are considered. If two variables have a high correlation, the function looks at the mean absolute correlation of each variable and removes the variable with the largest mean absolute correlation.
+
+```{r}
+cor.matrix <-  cor(train.data[,-1], use = "na.or.complete")
+ggcorrplot(cor.matrix)+
+  theme(axis.text.x=element_text(size=rel(.7), angle=90, hjust=1),
+        axis.text.y = element_text(size=rel(.7), hjust=1))+
+  ggtitle("Predictor Correlations")
+ 
+```
+
+
+```{r}
+#reshape the correlation matrix and identify the correlation pairs above 85%
+reshape2::melt(cor.matrix)%>%
+  rename(Predictor1 = Var1, Predictor2 = Var2, CorrelationValue = value)%>%
+  filter(CorrelationValue != 1)%>%
+  arrange(-CorrelationValue) %>%
+  filter(CorrelationValue >= 0.85)%>% 
+ filter (! duplicated(CorrelationValue))%>%
+  arrange(Predictor1, -CorrelationValue)
+```
+```{r}
+#identify which columns will later be removed 
+remove.cor.cols <- findCorrelation(cor.matrix, cutoff= .85,verbose = TRUE, 
+                                            names = TRUE)
+remove.cor.cols
+```
+
+
+
+**f.1) Scatter Plots - All Predictors**
+
+- Convert the train.data from wide to long foramt 
+- Use qplot to generate histograms for each variable 
+- Initial Findings (NORMAL?): Fill Ounces, PC Volume, Carb Pressure, Carb Temp, Carb Pressure1, PH follow somewhat normal distributions
+- Initial Findings (CLUSTER?): Mnf Flow,  Hyd Pressure1, Hyd Pressure2, Hyd Pressure3, Filler Speed, and Carb flow values appear more clustered and may need to be examined more closely 
+- Initial Findings (CATEGORICAL?): Pressure Setpoint, Bowl Setpoint appear to be more categorical as there is very little variety/distribution in the resulting data 
+
+```{r message = F, waring = F, fig.width=10, fig.height=8}
+
+melted.train <- melt(train.data[,-1])
+qplot(value, data=melted.train) + facet_wrap(~variable, scales="free") 
+```
+
+
+**f.2) Scatter Plots For Identified Clustered Predictors**
+
+- Use plot() to test the PH levels based on each predictor identified to assess if any values are problematic and should be removed in the modeling step
+- Find the counts at each bin to assess if the distribution makes sense 
+
+*Function to generate the scatter plot of PH vs. the inputted predictor*
+
+```{r,  fig.width=10, fig.height=8}
+scatter_analysis <- function(predictor) {
+  subset<- train.data %>%
+  select(c(predictor, "PH"))%>%
+  filter(complete.cases(predictor, "PH"))
+
+  plotgraphic<- plot(subset, aes(PH, predictor))+
+    title(paste0("PH Levels Based on: ", predictor))
+  
+  return(plotgraphic)
+}
+
+
+```
+
+*Function to generate the counts at each bin*
+
+```{r, results = 'hide' }
+distribution_cluster <- function(predictor) {
+  test <- melted.train%>%
+    filter(variable ==predictor )%>%
+    select(c(value))
+  
+  histrv<- hist(test$value)
+  breaks <-   histrv$breaks
+  
+  #loop through the breaks to generate the string range 
+  value_list <- c()
+  i <- 1
+  for (val in breaks){
+    if(which(breaks == val) != 1){
+      value_list[[i]] <- paste0(breaks[which(breaks == val)-1]," to ",breaks[which(breaks == val)] )
+      i <- i +1
+    }
+  }
+#create a dateframe from the breaks and the counts  
+return_df<- data.frame(breaks= value_list, counts = histrv$counts)
+#add the percentage at each break point
+return_df <- return_df %>%
+            mutate(Percentage_Break = round((counts/sum(counts))*100,2))
+return(return_df)  
+}
+
+```
+
+**f.2) Mnf Flow**
+
+- The group selected MnF Flow to further analyze because the histogram presented odd behavior with a sizable concentration of  negative 100 values when the rest of the values are positive and are concentrated around 100 to 160. It is likely that these values were misattributed with a negative value or it is a placeholder for null values.
+- Using the distribution_cluster function, it was discovered that the negative 100 concentration makes up approximately 46.1% of the observations. Given the high concentration of seemingly misattributed values, the group will not consider Mnf Flow as a model predictor.
+
+```{r}
+scatter_analysis("Mnf Flow")
+distribution_cluster("Mnf Flow")
+```
+
+**f.2) Hyd Pressure1, Hyd Pressure2, Hyd Pressure3**
+
+- Similar to Mnf Flow, Hyd Pressure1, Hyd Pressure2, and Hyd Pressure3  presented an odd distribution pattern with a relvatively high concentration of observations clustered around zero and the rest of the observations following a somewhat normal distributions around different ranges. It is the groups suspision that the high concentration of zeros are imputed NaN values.
+
+- The distribution_cluster() function notes that these zero observations make up approximately 34.3%, 35.1%, and 34.6%  of the total observations for Hyd Pressure1, Hyd Pressure2, and Hyd Pressure3, respectively .Given the high concentration of seemingly misattributed values, the group will not consider Hyd Pressure1, Hyd Pressure2, Hyd Pressure3 as model predictors.
+
+
+```{r}
+#Hyd Pressure1
+scatter_analysis("Hyd Pressure1")
+distribution_cluster("Hyd Pressure1")
+```
+
+
+```{r}
+#Hyd Pressure2
+scatter_analysis("Hyd Pressure2")
+distribution_cluster("Hyd Pressure2")
+```
+
+```{r}
+#Hyd Pressure3
+scatter_analysis("Hyd Pressure3")
+distribution_cluster("Hyd Pressure3")
+```
+
+#### 3. Data Transformation  
+
+
+- a. Remove problematic predictors
+- b. Impute null values 
+- c. Create Dummy cols for the Brand Codes 
+
+
+**a) Predictor Reduction**
+
+- remove the highly correlated predictors identified above and stored as "remove.cor.cols"
+- remove the predictors with the problematic distribution noted above 
+- Following the removal of the identified predictors, there are 22 predictor columns to be considered 
+```{r}
+#full identified list
+remove.var <- c("Mnf Flow", "Hyd Pressure1", "Hyd Pressure2", "Hyd Pressure3","Balling",  "Alch Rel", "Balling Lvl", "Carb Rel","Filler Level", "Filler Speed")
+
+#function to remove columns
+remove <- function(dataframe, remove.var){
+  return.df <- dataframe %>%
+               select(-remove.var)
+  
+  return(return.df)
+}
+
+#remove from train and test
+
+train.sub<- remove(train.data,remove.var )
+eval.sub<- remove(eval.data,remove.var )
+
+
+print(paste("Dimensions of the train.sub:", list(dim(train.sub))))
+print(paste("Dimensions of the eval.sub:", list(dim(eval.sub))))
+```
+
+**b) Impute null values**
+
+- Fill in the missing Brand Code as "U" for unknown
+- Relative to the number of obervations, the nulls values are not significant for the remaining predictors. The group will use the mice package to impute the data 
+- Since we have a limited amount of missing values accross predictors, we will impute the data. We will use the mice package. The mice package implements a method to deal with missing data. The package creates multiple imputations (replacement values) for multivariate missing data. The method is based on Fully Conditional Specification, where each incomplete variable is imputed by a separate model.
+- The density plots below display the imputed density distribution in red 
+
+
+```{r}
+#fill in the Brand Code with "U" for unknown 
+train.sub$`Brand Code`[is.na(train.sub$`Brand Code`)]= "U"
+eval.sub$`Brand Code`[is.na(eval.sub$`Brand Code`)]= "U"
+train.sub%>%
+  group_by(`Brand Code`)%>%
+  summarise(n = n())
+```
+
+
+
+```{r warning = F, message = F}
+#mice impute function, call on eval and train data 
+impute_mice <- function(dataframe){
+  #fix the column names so that the mice package can be used 
+  cols <- str_replace(colnames(dataframe), '\\s', '')
+  colnames(dataframe) <- cols
+  
+  #call the mice function on the train data 
+  
+  mic.imputes <- mice(dataframe, print = FALSE,seed = 123)
+
+ 
+  
+  return(mic.imputes)
+  
+}
+
+
+```
+
+
+
+ 
+
+
+```{r}
+#apply to train
+
+train.imputed <- impute_mice(train.sub)
+densityplot(train.imputed)
+train.imputed <- complete(train.imputed)
+
+```
+
+
+
+```{r}
+#apply to eval
+eval.imputed <- impute_mice(eval.sub)
+densityplot(eval.imputed)
+eval.imputed <- complete(eval.imputed)
+```
+
+**c) Brand Code Dummy Columns**
+
+- Hot encode the Brand Code categorical variable into factors. This removes any issues with the modeling.
+
+```{r message = F, warning=F}
+dummy_creation <- function(dataframe){
+  df <- cbind(dataframe, dummy_cols(dataframe[,'BrandCode'])) %>%
+        select(-c('BrandCode','.data'))%>%
+        rename(BrandB =`.data_B` , BrandA = `.data_A`, BrandC = `.data_C`, BrandD =`.data_D`, BrandU =`.data_U` )
+  
+  return(df)
+  
+  
+}
+train.imputed.dum<- dummy_creation(train.imputed)
+eval.imputed.dum<- dummy_creation(eval.imputed)
+```
+
+
+
+
+
+#### 4. Modeling Building 
+
+- a) Split the data into train/test
+- b) Multiple linear Regression
+- c) GLM
+
+
+
+
+```{r}
+## set the seed to make the partition reproducible
+set.seed(123)
+# Procedure to create a train control data-set.
+train.set <- createDataPartition(train.imputed.dum$PH, p = 0.75, list=FALSE)
+
+#apply to the predictors 
+x.Train <- train.imputed.dum[train.set,] %>%
+           select(-c('PH'))
+
+x.Test <- train.imputed.dum[-train.set,] %>%
+          select(-c('PH'))
+#apply to PH
+y.Train <- train.imputed.dum[train.set,]%>%
+           select(c('PH'))
+y.Test <- train.imputed.dum[-train.set,]%>%
+           select(c('PH'))
+
+
+
+```
+
+
+
+
+
+
+
+
+
