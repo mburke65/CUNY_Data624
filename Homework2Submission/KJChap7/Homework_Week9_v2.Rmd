@@ -1,0 +1,493 @@
+---
+title: "Data 624: Week 9Homework"
+author: "Angrand, Burke, Deboch, Groysman, Karr"
+date: "December 8, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+fig_width: 7
+fig_height: 3
+---
+
+
+##### Chapter 7 KJ 7.2, 7.5
+
+```{r, load-packages, eval=TRUE, include=FALSE}
+suppressMessages(library("AppliedPredictiveModeling"))
+suppressMessages(library("caret"))
+suppressMessages(library("mlbench"))
+suppressMessages(library("tidyverse"))
+suppressMessages(library("pracma"))
+suppressMessages(library("gridExtra"))
+suppressMessages(library("ggplot2"))
+suppressMessages(library("ggcorrplot"))
+```
+
+## Exercise 7.2
+
+7.2 Friedman (1991) introduced several benchmark data sets created by simulation.
+One of these simulations used the following nonlinear equation to create data:
+
+$$
+y = 10 \sin(\pi x_1x_2) + 20 (x_3 - 0.5)^2 + 10 x_4 + 5 x_5 + N(0, \sigma^2)
+$$
+
+where the $x$ values are random variables uniformly distributed between [0,1] (there are also 5 other non-informative variables created in the simulation).  The package *mlbench* contains a function called mlbench.friedman1 that simulates these data:
+
+
+### Read Data & EDA 
+
+**a. Creating Training and Testing Data**
+
+```{r, warning = F, message=F}
+set.seed(100)
+trainingData <- mlbench.friedman1(200, sd = 1)
+## We convert th 'x' data from a matrix to data frame
+## One reason is that this will give the columns names.
+trainingData$x <- data.frame(trainingData$x)
+
+
+
+## This creates a list with a vector 'y' and a matrix
+## of predictors 'x'.  Also simulate a large test set to
+## estimate the truee error rate with good precisions:
+testData <- mlbench.friedman1(5000, sd = 1)
+testData$x <- data.frame(testData$x)
+```
+
+
+
+**The relationship between the predictors `x1`-`x10` and the response y**
+
+```{r}
+head(trainingData$x)
+```
+
+
+```{r}
+head(testData$x)
+```
+
+**b. Determine correlation between x and y**
+
+```{r}
+## Look at the data using featurePlot
+## or other methods.
+
+trainingData$x %>%
+  #gather x and y
+  mutate(y=trainingData$y) %>%
+  # tidy data frame for easier manipulating & plotting
+  gather(var, x,-y) %>%
+  #factor x variable and change factors so X10 is last
+  mutate(var= forcats::fct_relevel(factor(var), "X10", after=Inf)) %>%
+  ggplot(aes(x,y)) +
+  geom_point(alpha=0.25) +
+  stat_smooth(method="glm", se = FALSE) +
+  facet_wrap(~ var, nrow = 2)
+```
+
+
+### Training Models
+
+Tune several models on these data.  For example:
+
+**a. K-Nearest Neighboor Model (KNN)**
+
+```{r, warning = F, message = F}
+library(caret)
+set.seed(921)
+knnModel <- train(x = trainingData$x,
+                  y = trainingData$y,
+                  method = "knn",
+                  preProc = c("center","scale"),
+                  tuneLength = 10)
+knnModel
+```
+
+RMSE with varying tuning parameters
+
+```{r warning = F, message = F}
+knnModel$results %>%
+  ggplot(aes(x=k, y=RMSE)) +
+  geom_line() + geom_point(size=1) +
+  labs(title="KNN VS RMSE")
+```
+
+
+- k=15 is the optimal model 
+
+
+
+
+```{r, warning = F, message = F}
+knnPred <- predict(knnModel, newdata = testData$x)
+
+## The function 'postResample' can be used to get test set
+## performance values
+knn.pred <- postResample(pred = knnPred, obs = testData$y)
+knn.pred
+```
+
+Which model appears to get the best performance?  Does MARS select the informative predictors (those named X1-15)
+
+K-nearest neighbors models perform better when predictor and response relationships have a locational dependency.  The simulation data is not related in this way so other models are expected perform better.  In fact MARS and SVM have lower RMSE values and thus a better fit.
+
+
+**b. MARS Model**
+
+```{r, warning = F, message = F}
+marsGrid <- expand.grid(degree = 1:2, nprune = seq(2,14,by=2))
+set.seed(921)
+marsModel <- train(x = trainingData$x,
+                   y = trainingData$y,
+                   method = "earth",
+                   preProc = c("center","scale"),
+                   tuneGrid = marsGrid)
+
+marsPred <- predict(marsModel, newdata = testData$x)
+plot(marsModel)
+mars.pred <- postResample(pred = marsPred, obs = testData$y)
+mars.pred
+```
+
+- The MARS model is the optimal one of those tested with the lowest RMSE or fit. The optimal RMSE is achieved with a second-degree.  We can further investigate variable importance and see that only the top 5 predictors have significant influence on the response variable with the following ranking . . . V4, V1, V3, V5, V3.
+
+```{r, message = F, warning=F}
+varImp(marsModel)
+```
+
+- A summary model can also be generated using the earth function
+
+```{r, warning = F, message = F}
+marsFit <- earth(x = trainingData$x,
+                 y = trainingData$y,
+                 nprune = 12, degree = 2)
+summary(marsFit)
+```
+
+
+**c. SVM Model**
+
+```{r, warning = F, message = F}
+plotmo(marsFit, caption = "")
+set.seed(921)
+svmRModel <- train(x = trainingData$x, 
+                   y = trainingData$y,
+                   method = "svmRadial",
+                   preProc = c("center","scale"),
+                   tuneLength = 8)
+svmRPred <- predict(svmRModel, newdata = testData$x)
+
+svm.pred <- postResample(pred = svmRPred, obs = testData$y)
+plot(svmRModel, scales = list(x = list(log = 2)))
+```
+
+- The Cost to RMSE(Bootstrap) plot shows the SVM tuning parameter profile.  The optimal model has a cost value of 16 and an RMSE of ~2.0%  
+
+```{r}
+rbind(knn.pred, mars.pred, svm.pred)
+```
+
+
+
+- Overall, the MARS model performs best, the radial basis function SVM coming in next and K-NN has the worst performance for this problem.
+
+## Exercise 7.5
+```
+7.5 Exercise 6.3 describes data for a chemical manufacturing process.  Use the smae data imputation, data splitting and pre-processing steps as before and train several nonlinear regressions models.
+
+a) Which nonlinear regression model gives the optimal resampling and test set performance?
+
+b) Which predictors are most important in the optimal nonlinear regression model?
+   Do either the biological or process variables dominate the list?
+   How do the top ten important predictors compare to the top ten predictors from the optimal linear model?
+   
+c) Explore the relationships between the top predictors and the response for the predictors that are unique to the optimal nonlinear regression model.  Do these plots reveal intuition about the bioglogical or process predictors and their relationship yield?
+```
+
+### Data Pre-Work 
+
+
+**a. Read in Data & EDA**
+
+```{r, warning = F, message = F}
+set.seed(100)
+data(ChemicalManufacturingProcess)
+
+processPredictors = ChemicalManufacturingProcess[,2:58]
+yield = ChemicalManufacturingProcess[,1]
+
+n_samples = dim(processPredictors)[1]
+n_features = dim(processPredictors)[2]
+n_samples
+n_features
+```
+
+**b. Impute missing values**
+
+```{r, warning = F, message = F}
+null.values <-as.data.frame(sapply(processPredictors, function(x) sum(is.na(x))), col.names = "null_values")%>%
+  tibble::rownames_to_column("Predictors")%>%
+  rename(nulls = 2)%>%
+  arrange(-nulls)%>%
+  filter(nulls >0)
+null.values
+```
+
+```{r, warning = F, message = F}
+# Fill in missing values where we have NAs with the median over the non-NA values: 
+replacements = sapply( processPredictors, median, na.rm=TRUE )
+as.data.frame(replacements)
+
+for( ci in 1:n_features ){
+  bad_inds = is.na( processPredictors[,ci] )
+  processPredictors[bad_inds,ci] = replacements[ci]
+}
+```
+
+**c. No Variance Predictors Removal**
+
+```{r, warning = F, message = F}
+# Look for any features with no variance:
+zero_cols = nearZeroVar( processPredictors )
+zero_cols
+processPredictors = processPredictors[,-zero_cols] # drop these zero variance columns 
+```
+
+**d. Train/Test Split**
+
+```{r, warning = F, message = F}
+# Split this data into training and testing sets:
+# We set aside 20% of the observations to be the test dataset.
+training = createDataPartition( yield, p=0.8 )
+
+processPredictors_training = processPredictors[training$Resample1,]
+yield_training = yield[training$Resample1]
+
+processPredictors_testing = processPredictors[-training$Resample1,]
+yield_testing = yield[-training$Resample1]
+preProc_Arguments = c("center","scale")
+```
+
+
+### Data Modeling 
+
+**a. PLS**
+
+- adding thepls for comp. purposes 
+```{r,warning = F, message = F}
+set.seed(100)
+plsModel<-train(x=processPredictors_training, y=yield_training, method="pls", tuneLength = 10,preProcess=preProc_Arguments)
+plsModel
+
+# Lets see what variables are most important in the pls model: 
+dotPlot(varImp(plsModel), top=15)
+```
+
+
+
+**b. KNN**
+
+```{r,warning = F, message = F}
+# A K-NN model:
+set.seed(100)
+knnModel = train(x=processPredictors_training, y=yield_training, method="knn", preProc=preProc_Arguments, tuneLength=10)
+
+# predict on training/testing sets
+knnPred = predict(knnModel, newdata=processPredictors_training)
+knnPR = postResample(pred=knnPred, obs=yield_training)
+rmses_training = c(knnPR[1])
+r2s_training = c(knnPR[2])
+methods = c("KNN")
+
+pred.train.knn<- data.frame(cbind(rmses_training, r2s_training))
+
+knnPred = predict(knnModel, newdata=processPredictors_testing)
+knnPR = postResample(pred=knnPred, obs=yield_testing)
+rmses_testing = c(knnPR[1])
+r2s_testing = c(knnPR[2])
+
+pred.test.knn<- data.frame(cbind(rmses_testing, r2s_testing))
+knnModel
+pred.train.knn
+pred.test.knn
+
+# Lets see what variables are most important in the MARS model: 
+dotPlot(varImp(knnModel), top=15)
+```
+
+
+**c. MARS**
+
+```{r,warning = F, message = F}
+# MARS model:
+marsGrid = expand.grid(.degree=1:2, .nprune=2:38)
+set.seed(100)
+marsModel = train(x=processPredictors_training, y=yield_training, method="earth", preProc=preProc_Arguments, tuneGrid=marsGrid)
+      
+marsPred = predict(marsModel, newdata=processPredictors_training)
+marsPR = postResample(pred=marsPred, obs=yield_training)
+rmses_training = c(rmses_training,marsPR[1])
+r2s_training = c(r2s_training,marsPR[2])
+methods = c(methods,"MARS")
+
+pred.train.mars<- data.frame(cbind(rmses_training, r2s_training))
+
+marsPred = predict(marsModel, newdata=processPredictors_testing)
+marsPR = postResample(pred=marsPred, obs=yield_testing)
+rmses_testing = c(rmses_testing,marsPR[1])
+r2s_testing = c(r2s_testing,marsPR[2])
+
+pred.test.mars<- data.frame(cbind(rmses_testing, r2s_testing))
+
+
+marsModel
+pred.train.mars
+pred.test.mars
+# Lets see what variables are most important in the MARS model: 
+dotPlot(varImp(marsModel), top=15)
+```
+
+
+**d. SVM**
+
+```{r, warning=F, message=F}
+# A Support Vector Machine (SVM):
+set.seed(100)
+svmModel = train(x=processPredictors_training, y=yield_training, method="svmRadial", preProc=preProc_Arguments, tuneLength=20)
+
+svmPred = predict(svmModel, newdata=processPredictors_training)
+svmPR = postResample(pred=svmPred, obs=yield_training) 
+rmses_training = c(rmses_training,svmPR[1])
+r2s_training = c(r2s_training,svmPR[2])
+methods = c(methods,"SVM")
+
+pred.train.svm<- data.frame(cbind(rmses_training, r2s_training))
+
+svmPred = predict(svmModel, newdata=processPredictors_testing)
+svmPR = postResample(pred=svmPred, obs=yield_testing)
+rmses_testing = c(rmses_testing,svmPR[1])
+r2s_testing = c(r2s_testing,svmPR[2])
+
+
+
+pred.test.svm<- data.frame(cbind(rmses_testing, r2s_testing))
+
+svmModel
+pred.train.svm
+pred.test.svm
+```
+
+
+
+### Questions - Answered 
+
+**a.** Which nonlinear regression model gives the optimal resampling and test set performance?**
+
+- The test data used for predictions for KNN, MARS and SVM had RMSE values of 1.59, 1.82 and 1.21 respectively. The SVM model achieved this fit and appears to be the optimal model of those attempted.
+
+```{r, warning=F, message=F}
+# Package the results up:
+res_training = data.frame( rmse=rmses_training, r2=r2s_training )
+rownames(res_training) <- methods
+
+training_order = order( -res_training$rmse )
+
+res_training = res_training[ training_order, ] # Order the dataframe so that the best results are at the bottom:
+print("Final Training Results")
+res_training
+
+res_testing = data.frame( rmse=rmses_testing, r2=r2s_testing )
+rownames(res_testing) = methods
+
+res_testing = res_testing[ training_order, ] # Order the dataframe so that the best results for the training set are at the bottom:
+print("Final Testing Results")
+res_testing
+
+resamp = resamples( list(knn=knnModel,svm=svmModel,mars=marsModel) )
+summary(resamp) 
+
+dotplot( resamp, metric="RMSE" )
+summary(diff(resamp))
+
+```
+
+**b.** The variable importance, Which predictors are most important in the optimal nonlinear regression model? Do either the biological or process variables dominate the list? How do the top ten important predictors compare to the top ten predictors from the optimal linear model?
+- Yes, ManufacturingProcessXX dominates the list.  There are 4 BiologicalMaterials that rank 2,6,8,9. 
+- ManufacturingProcess32 is the most important predictor in both pls and svm. The remaining dominant predictors are also very similar and maintain similar order of importance.
+
+```{r, warning=F, message=F}
+dotPlot(varImp(plsModel),main="plsModel", top=10)
+dotPlot(varImp(svmModel),main="svmModel", top=10)
+
+```
+
+**c.** Explore the relationships between the top predictors and the response for the predictors that are unique to the optimal nonlinear regression model.Do these plots reveal intuition about the biological or process predictors and their relationship with yield?
+
+- Explore the correlations between the top svm predictors ("ManufacturingProcess32","ManufacturingProcess36", "ManufacturingProcess33", "BiologicalMaterial02","ManufacturingProcess09")
+  - "ManufacturingProcess32" and "ManufacturingProcess33" have a correlation value of .87 which means they are likely providing same information and are redundant in the model
+  - The four of the five top predictors show low to moderate correlation with the response variable
+
+- Next predictor and plot how the response varies as a function of this value.  Build a dataframe with variation in only one dimension (for this part we pick ManufacturingProcess32)
+
+
+```{r}
+#y=yield_training
+top.pred.svm <- processPredictors_training %>%
+  select(c("ManufacturingProcess32","ManufacturingProcess36", "ManufacturingProcess33", "BiologicalMaterial02","ManufacturingProcess09"))
+
+print("Cor() TOP Pred")
+
+ggcorrplot(cor(top.pred.svm))+
+  theme(axis.text.x=element_text(size=rel(.7), angle=90, hjust=1),
+        axis.text.y = element_text(size=rel(.7), hjust=1))+
+  ggtitle("Predictor Correlations")
+
+reshape2::melt(cor(top.pred.svm))%>%
+  rename(Predictor1 = Var1, Predictor2 = Var2, CorrelationValue = value)%>%
+  filter(CorrelationValue != 1)%>% 
+ filter (! duplicated(CorrelationValue))
+
+print("Cor() Against Yield")
+cor(top.pred.svm, yield_training)
+```
+
+
+
+```{r}
+plot.funct <- function(processPredictors, predictor){    
+  p_range = range( processPredictors[,predictor] )
+
+  variation = seq( from=p_range[1], to=p_range[2], length.out=100 )
+  mean_predictor_values = apply( processPredictors, 2, mean )
+ 
+  # build a dataframe with variation in only one dimension (for this part we pick ManufacturingProcess32)
+  
+  newdata = repmat( as.double(mean_predictor_values), length(variation), 1 )
+  newdata = data.frame( newdata )
+
+  colnames( newdata ) = colnames( processPredictors )
+  newdata[,predictor] = variation
+  xs = variation
+  y_hat = predict( svmModel, newdata=as.matrix(newdata) )
+  return(plot( xs, y_hat, xlab='variation', ylab='predicted yield' , main = predictor))
+
+  
+}
+plot.funct(processPredictors, "ManufacturingProcess32")
+plot.funct(processPredictors, "ManufacturingProcess36")
+plot.funct(processPredictors, "ManufacturingProcess33")
+plot.funct(processPredictors, "BiologicalMaterial02")
+plot.funct(processPredictors, "ManufacturingProcess09")
+
+
+featurePlot(top.pred.svm, yield_training)
+
+```
+
+
+
+
+
